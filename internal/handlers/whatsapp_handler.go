@@ -241,7 +241,17 @@ func (h *WhatsAppHandler) processAICommand(user *models.User, message string) st
 		return h.handleAIViewOrders(user, message, result)
 	case "list_users":
 		return h.handleAIListUsers(user, aiResponse)
+	case "create_reminder":
+		return h.handleAICreateReminder(user, aiResponse)
+	case "view_reminders":
+		return h.handleAIViewReminders(user, aiResponse)
 	case "general":
+		// Check if AI suggests help command
+		if strings.Contains(strings.ToLower(aiResponse.Message), "help") || 
+		   strings.Contains(strings.ToLower(aiResponse.Message), "don't understand") ||
+		   strings.Contains(strings.ToLower(aiResponse.Message), "unknown") {
+			return fmt.Sprintf("🤖 %s\n\n%s", aiResponse.Message, h.getHelpMessage(user.Role))
+		}
 		// General AI response
 		return fmt.Sprintf("🤖 %s", aiResponse.Message)
 	default:
@@ -650,8 +660,8 @@ func (h *WhatsAppHandler) handleAIGeneralIntent(user *models.User, message strin
 		return h.getHelpMessage(user.Role)
 	}
 	
-	// Default AI response
-	return fmt.Sprintf("🤖 %s", aiResult)
+	// Default AI response with help fallback
+	return fmt.Sprintf("🤖 %s\n\n%s", aiResult, h.getHelpMessage(user.Role))
 }
 
 func (h *WhatsAppHandler) processAdminCommand(user *models.User, command string, args []string) string {
@@ -1364,4 +1374,71 @@ func (h *WhatsAppHandler) handleStructuredAICreateOrderWithItem(user *models.Use
 	
 	return fmt.Sprintf("✅ Order dengan item berhasil dibuat!\n📦 Order Number: %s\n👤 Customer: %s\n💰 Total: Rp %.0f\n🛒 Item: %s (Qty: %.0f, Harga: Rp %.0f)\n📅 Tanggal: %s", 
 		orderNumber, customerName, totalAmountFloat, itemName, quantityFloat, priceFloat, order.OrderDate.Format("2006-01-02 15:04"))
+}
+
+// handleAICreateReminder handles AI-detected create reminder requests
+func (h *WhatsAppHandler) handleAICreateReminder(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk membuat reminder. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Extract data from AI response
+	taskIDFloat, _ := aiResponse.Data["task_id"].(float64)
+	reminderType, _ := aiResponse.Data["reminder_type"].(string)
+	scheduledTimeStr, _ := aiResponse.Data["scheduled_time"].(string)
+	
+	// Validate required fields
+	if taskIDFloat == 0 || reminderType == "" || scheduledTimeStr == "" {
+		return "❌ Data tidak lengkap. Pastikan task_id, reminder_type, dan scheduled_time tersedia."
+	}
+	
+	// Parse scheduled time
+	scheduledTime, err := time.Parse("2006-01-02 15:04", scheduledTimeStr)
+	if err != nil {
+		return "❌ Format waktu tidak valid. Gunakan format: YYYY-MM-DD HH:MM (contoh: 2025-10-05 10:00)"
+	}
+	
+	// Create reminder
+	err = h.reminderService.CreateTaskReminder(uint(taskIDFloat), reminderType, scheduledTime)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal membuat reminder: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ Reminder berhasil dibuat!\n📝 Task ID: %.0f\n🔔 Type: %s\n⏰ Scheduled: %s", 
+		taskIDFloat, reminderType, scheduledTime.Format("2006-01-02 15:04"))
+}
+
+// handleAIViewReminders handles AI-detected view reminders requests
+func (h *WhatsAppHandler) handleAIViewReminders(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk melihat reminders. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Get all pending reminders
+	reminders, err := h.reminderService.GetPendingReminders()
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal mengambil daftar reminders: %s", err.Error())
+	}
+	
+	if len(reminders) == 0 {
+		return "🔔 Tidak ada reminder yang pending."
+	}
+	
+	response := "🔔 **Daftar Reminders:**\n\n"
+	for _, r := range reminders {
+		status := "❌ Not Sent"
+		if r.WhatsAppSent {
+			status = "✅ Sent"
+		}
+		
+		response += fmt.Sprintf("**ID: %d** - **Task: %d**\n", r.ID, r.TaskID)
+		response += fmt.Sprintf("🔔 Type: %s\n", r.ReminderType)
+		response += fmt.Sprintf("⏰ Scheduled: %s\n", r.ScheduledTime.Format("2006-01-02 15:04"))
+		response += fmt.Sprintf("Status: %s\n", status)
+		response += "\n"
+	}
+	
+	return response
 }

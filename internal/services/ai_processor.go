@@ -199,11 +199,13 @@ MESSAGE TYPES TO DETECT:
 7. list_users - "list user", "lihat users", "show users", "daftar user"
 8. add_order_item - "tambah item [order_id] [item_name] [quantity] [price] [description]"
 9. view_order_items - "lihat items order [order_id]", "show order items [order_id]"
-10. general - greetings, questions, general chat
+10. create_reminder - "buat reminder [task_id] [reminder_type] [scheduled_time]"
+11. view_reminders - "lihat reminders", "lihat reminder", "show reminders", "show reminder"
+12. general - greetings, questions, general chat
 
 RESPONSE FORMAT (JSON only):
 {
-  "type": "add_user|create_order|create_order_with_item|assign_task|view_tasks|view_orders|list_users|add_order_item|view_order_items|general",
+  "type": "add_user|create_order|create_order_with_item|assign_task|view_tasks|view_orders|list_users|add_order_item|view_order_items|create_reminder|view_reminders|general",
   "data": {
     "username": "string",
     "email": "string", 
@@ -217,7 +219,10 @@ RESPONSE FORMAT (JSON only):
     "order_id": "number",
     "item_name": "string",
     "quantity": "number",
-    "price": "number"
+    "price": "number",
+    "task_id": "number",
+    "reminder_type": "string",
+    "scheduled_time": "string"
   },
   "message": "Friendly response message"
 }
@@ -247,8 +252,17 @@ Output: {"type":"add_order_item","data":{"order_id":1,"item_name":"Laptop","quan
 Input: "lihat items order 1"
 Output: {"type":"view_order_items","data":{"order_id":1},"message":"I'll show you the items for order 1"}
 
+Input: "buat reminder 1 deadline 2025-10-05 10:00"
+Output: {"type":"create_reminder","data":{"task_id":1,"reminder_type":"deadline","scheduled_time":"2025-10-05 10:00"},"message":"I'll create a deadline reminder for task 1"}
+
+Input: "lihat reminders"
+Output: {"type":"view_reminders","data":{},"message":"I'll show you all reminders"}
+
 Input: "halo"
 Output: {"type":"general","data":{},"message":"Hello! How can I help you today?"}
+
+Input: "unknown command"
+Output: {"type":"general","data":{},"message":"I don't understand that command. Please use /help to see available commands."}
 
 IMPORTANT: Always return valid JSON format only. No additional text.`,
 		},
