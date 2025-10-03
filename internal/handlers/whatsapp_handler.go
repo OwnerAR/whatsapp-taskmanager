@@ -237,6 +237,8 @@ func (h *WhatsAppHandler) processAICommand(user *models.User, message string) st
 		return h.handleAIViewTasks(user, message, result)
 	case "view_orders":
 		return h.handleAIViewOrders(user, message, result)
+	case "list_users":
+		return h.handleAIListUsers(user, aiResponse)
 	case "general":
 		// General AI response
 		return fmt.Sprintf("🤖 %s", aiResponse.Message)
@@ -349,8 +351,12 @@ func (h *WhatsAppHandler) handleStructuredAICreateOrder(user *models.User, aiRes
 		return "❌ Data tidak lengkap. Pastikan customer_name dan total_amount tersedia."
 	}
 	
+	// Generate unique order number
+	orderNumber := fmt.Sprintf("ORD-%d", time.Now().Unix())
+	
 	// Create order using existing service
 	order := &models.Order{
+		OrderNumber:  orderNumber,
 		CustomerName: customerName,
 		TotalAmount:  totalAmountFloat,
 		Status:       "pending",
@@ -363,8 +369,8 @@ func (h *WhatsAppHandler) handleStructuredAICreateOrder(user *models.User, aiRes
 		return fmt.Sprintf("❌ Gagal membuat order: %s", err.Error())
 	}
 	
-	return fmt.Sprintf("✅ Order berhasil dibuat!\n📦 Customer: %s\n💰 Total: Rp %.0f\n📅 Tanggal: %s", 
-		customerName, totalAmountFloat, order.OrderDate.Format("2006-01-02 15:04"))
+	return fmt.Sprintf("✅ Order berhasil dibuat!\n📦 Order Number: %s\n👤 Customer: %s\n💰 Total: Rp %.0f\n📅 Tanggal: %s", 
+		orderNumber, customerName, totalAmountFloat, order.OrderDate.Format("2006-01-02 15:04"))
 }
 
 // handleStructuredAIAssignTask handles structured AI assign task requests
@@ -1274,4 +1280,39 @@ func (h *WhatsAppHandler) generateDailyReport() string {
 
 func (h *WhatsAppHandler) generateMonthlyReport() string {
 	return "📊 **Monthly Report:**\n\nThis feature will show this month's financial summary."
+}
+
+// handleAIListUsers handles AI-detected list users requests
+func (h *WhatsAppHandler) handleAIListUsers(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk melihat daftar user. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Get all users
+	users, err := h.userService.GetAllUsers()
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal mengambil daftar user: %s", err.Error())
+	}
+	
+	if len(users) == 0 {
+		return "👥 Tidak ada user yang ditemukan."
+	}
+	
+	response := "👥 **Daftar User:**\n\n"
+	for _, u := range users {
+		status := "❌ Inactive"
+		if u.IsActive {
+			status = "✅ Active"
+		}
+		
+		response += fmt.Sprintf("**ID: %d** - **%s**\n", u.ID, u.Username)
+		response += fmt.Sprintf("📧 Email: %s\n", u.Email)
+		response += fmt.Sprintf("📱 Phone: %s\n", u.PhoneNumber)
+		response += fmt.Sprintf("🔑 Role: %s\n", u.Role)
+		response += fmt.Sprintf("Status: %s\n", status)
+		response += "\n"
+	}
+	
+	return response
 }

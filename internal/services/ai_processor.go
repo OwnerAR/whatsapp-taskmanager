@@ -195,11 +195,12 @@ MESSAGE TYPES TO DETECT:
 3. assign_task - "assign task [title] [description] to [username]"
 4. view_tasks - "lihat tasks saya", "show my tasks"
 5. view_orders - "lihat orders", "show orders"
-6. general - greetings, questions, general chat
+6. list_users - "list user", "lihat users", "show users", "daftar user"
+7. general - greetings, questions, general chat
 
 RESPONSE FORMAT (JSON only):
 {
-  "type": "add_user|create_order|assign_task|view_tasks|view_orders|general",
+  "type": "add_user|create_order|assign_task|view_tasks|view_orders|list_users|general",
   "data": {
     "username": "string",
     "email": "string", 
@@ -220,6 +221,9 @@ Output: {"type":"add_user","data":{"username":"ega","email":"egatryagung@gmail.c
 
 Input: "buat order John Doe 1000000"
 Output: {"type":"create_order","data":{"customer_name":"John Doe","total_amount":1000000},"message":"I'll create an order for John Doe with total 1000000"}
+
+Input: "list user"
+Output: {"type":"list_users","data":{},"message":"I'll show you the list of users"}
 
 Input: "halo"
 Output: {"type":"general","data":{},"message":"Hello! How can I help you today?"}
