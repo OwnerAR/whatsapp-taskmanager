@@ -167,20 +167,17 @@ func (h *WhatsAppHandler) EndSession(c *gin.Context) {
 }
 
 func (h *WhatsAppHandler) processCommand(user *models.User, message string) string {
-	// Parse command
-	parts := strings.Fields(message)
-	if len(parts) == 0 {
-		return "❌ Invalid command. Type /help for available commands."
+	// Check if message is empty
+	if strings.TrimSpace(message) == "" {
+		return "❌ Empty message. Type /help for available commands."
 	}
 
-	command := parts[0]
-	args := parts[1:]
-
-	// Debug: Check if message starts with /
-	fmt.Printf("DEBUG: Message: '%s', First word: '%s', Starts with /: %v\n", message, command, strings.HasPrefix(command, "/"))
-
 	// Check if it's a command (starts with /)
-	if strings.HasPrefix(command, "/") {
+	if strings.HasPrefix(strings.TrimSpace(message), "/") {
+		// Parse command
+		parts := strings.Fields(message)
+		command := parts[0]
+		args := parts[1:]
 		switch command {
 	case "/help":
 		return h.getHelpMessage(user.Role)
