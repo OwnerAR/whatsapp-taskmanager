@@ -176,6 +176,9 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 	command := parts[0]
 	args := parts[1:]
 
+	// Debug: Check if message starts with /
+	fmt.Printf("DEBUG: Message: '%s', First word: '%s', Starts with /: %v\n", message, command, strings.HasPrefix(command, "/"))
+
 	// Check if it's a command (starts with /)
 	if strings.HasPrefix(command, "/") {
 		switch command {
@@ -204,9 +207,15 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 		default:
 			// Check if user is admin or super admin for admin commands
 			if user.Role == string(models.Admin) || user.Role == string(models.SuperAdmin) {
-				return h.processAdminCommand(user, command, args)
+				result := h.processAdminCommand(user, command, args)
+				// If admin command not found, try AI processing
+				if strings.Contains(result, "Unknown admin command") {
+					return h.processNaturalLanguageMessage(user, message)
+				}
+				return result
 			}
-			return "❌ Unknown command. Type /help for available commands."
+			// For non-admin users, try AI processing for unknown commands
+			return h.processNaturalLanguageMessage(user, message)
 		}
 	} else {
 		// Handle natural language messages with AI
