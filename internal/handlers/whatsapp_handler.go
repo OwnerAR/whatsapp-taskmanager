@@ -176,7 +176,9 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 	command := parts[0]
 	args := parts[1:]
 
-	switch command {
+	// Check if it's a command (starts with /)
+	if strings.HasPrefix(command, "/") {
+		switch command {
 	case "/help":
 		return h.getHelpMessage(user.Role)
 	case "/clear_history":
@@ -199,12 +201,42 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 		return h.getUserReport(user.ID)
 	case "/report_by_date":
 		return h.getReportByDate(user.ID, args)
-	default:
-		// Check if user is admin or super admin for admin commands
-		if user.Role == string(models.Admin) || user.Role == string(models.SuperAdmin) {
-			return h.processAdminCommand(user, command, args)
+		default:
+			// Check if user is admin or super admin for admin commands
+			if user.Role == string(models.Admin) || user.Role == string(models.SuperAdmin) {
+				return h.processAdminCommand(user, command, args)
+			}
+			return "❌ Unknown command. Type /help for available commands."
 		}
-		return "❌ Unknown command. Type /help for available commands."
+	} else {
+		// Handle natural language messages with AI
+		return h.processNaturalLanguageMessage(user, message)
+	}
+}
+
+// processNaturalLanguageMessage handles natural language messages with AI
+func (h *WhatsAppHandler) processNaturalLanguageMessage(user *models.User, message string) string {
+	// Convert user ID to string for AI processor
+	userID := fmt.Sprintf("%d", user.ID)
+	
+	// Process message with AI
+	messageType, result, err := h.aiProcessor.ProcessWithOpenAI(message, userID)
+	if err != nil {
+		// Fallback to basic processing if AI fails
+		return "🤖 I'm having trouble understanding your message. Please try using a command like /help for available options."
+	}
+	
+	// Handle different types of AI responses
+	switch messageType {
+	case "order":
+		// AI detected an order message
+		return "📦 I detected an order message. Please use /create_order [customer_name] [total_amount] to create an order, or provide more details about the order."
+	case "task":
+		// AI detected a task message
+		return "📝 I detected a task message. Please use /assign_task [username] [title] [description] to create a task, or provide more details about the task."
+	default:
+		// General AI response
+		return fmt.Sprintf("🤖 %s", result)
 	}
 }
 
