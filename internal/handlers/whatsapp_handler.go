@@ -639,16 +639,19 @@ func (h *WhatsAppHandler) assignTask(userID uint, args []string) string {
 	} else {
 		// If not a number, treat as username
 		user, err := h.userService.GetUserByUsername(args[0])
-		if err != nil {
-			return "❌ User not found: " + args[0]
+			if err != nil {
+				return "❌ User not found: " + args[0]
+			}
+			assignedTo = user.ID
 		}
-		assignedTo = user.ID
-	}
 
-	task := &models.Task{
-		Title:       args[1],
-		Description: args[2],
-		AssignedTo:  uint(assignedTo),
+		// Join all args after title as description
+		description := strings.Join(args[2:], " ")
+		
+		task := &models.Task{
+			Title:       args[1],
+			Description: description,
+			AssignedTo:  uint(assignedTo),
 		Status:      string(models.Pending),
 		Priority:    string(models.Medium),
 		TaskType:    string(models.Custom),
@@ -675,16 +678,19 @@ func (h *WhatsAppHandler) createDailyTask(userID uint, args []string) string {
 	} else {
 		// If not a number, treat as username
 		user, err := h.userService.GetUserByUsername(args[0])
-		if err != nil {
-			return "❌ User not found: " + args[0]
+			if err != nil {
+				return "❌ User not found: " + args[0]
+			}
+			assignedTo = user.ID
 		}
-		assignedTo = user.ID
-	}
 
-	task := &models.Task{
-		Title:       args[1],
-		Description: args[2],
-		AssignedTo:  uint(assignedTo),
+		// Join all args after title as description
+		description := strings.Join(args[2:], " ")
+		
+		task := &models.Task{
+			Title:       args[1],
+			Description: description,
+			AssignedTo:  uint(assignedTo),
 		Status:      string(models.Pending),
 		Priority:    string(models.Medium),
 		CreatedBy:   userID,
@@ -710,16 +716,19 @@ func (h *WhatsAppHandler) createMonthlyTask(userID uint, args []string) string {
 	} else {
 		// If not a number, treat as username
 		user, err := h.userService.GetUserByUsername(args[0])
-		if err != nil {
-			return "❌ User not found: " + args[0]
+			if err != nil {
+				return "❌ User not found: " + args[0]
+			}
+			assignedTo = user.ID
 		}
-		assignedTo = user.ID
-	}
 
-	task := &models.Task{
-		Title:       args[1],
-		Description: args[2],
-		AssignedTo:  uint(assignedTo),
+		// Join all args after title as description
+		description := strings.Join(args[2:], " ")
+		
+		task := &models.Task{
+			Title:       args[1],
+			Description: description,
+			AssignedTo:  uint(assignedTo),
 		Status:      string(models.Pending),
 		Priority:    string(models.Medium),
 		CreatedBy:   userID,
