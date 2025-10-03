@@ -6,12 +6,8 @@ import (
 	"task_manager/internal/config"
 	"task_manager/internal/database"
 	"task_manager/internal/models"
-	"task_manager/internal/redis"
 	"task_manager/internal/repository"
 	"task_manager/internal/services"
-	"task_manager/pkg/whatsapp"
-
-	"gorm.io/gorm"
 )
 
 func main() {
