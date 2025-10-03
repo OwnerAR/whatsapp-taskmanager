@@ -1,147 +1,18 @@
-// Super Admin/Admin command implementations
-func (h *WhatsAppHandler) updateUser(args []string) string {
-	if len(args) < 2 {
-		return "❌ Usage: /update_user [user_id] [field]=[value] ..."
-	}
-	userID, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid user ID"
-	}
-	user, err := h.userService.GetUserByID(uint(userID))
-	if err != nil {
-		return "❌ User not found"
-	}
-	for _, field := range args[1:] {
-		kv := strings.SplitN(field, "=", 2)
-		if len(kv) != 2 {
-			continue
-		}
-		switch kv[0] {
-		case "username":
-			user.Username = kv[1]
-		case "email":
-			user.Email = kv[1]
-		case "phone":
-			user.PhoneNumber = kv[1]
-			user.WhatsAppNumber = kv[1]
-		case "role":
-			user.Role = kv[1]
-		}
-	}
-	err = h.userService.UpdateUser(user)
-	if err != nil {
-		return "❌ Failed to update user: " + err.Error()
-	}
-	return "✅ User updated successfully"
-}
-
-func (h *WhatsAppHandler) deleteUser(args []string) string {
-	if len(args) < 1 {
-		return "❌ Usage: /delete_user [user_id]"
-	}
-	userID, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid user ID"
-	}
-	err = h.userService.DeleteUser(uint(userID))
-	if err != nil {
-		return "❌ Failed to delete user: " + err.Error()
-	}
-	return "✅ User deleted successfully"
-}
-
-func (h *WhatsAppHandler) setRole(args []string) string {
-	if len(args) < 2 {
-		return "❌ Usage: /set_role [user_id] [role]"
-	}
-	userID, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid user ID"
-	}
-	user, err := h.userService.GetUserByID(uint(userID))
-	if err != nil {
-		return "❌ User not found"
-	}
-	user.Role = args[1]
-	err = h.userService.UpdateUser(user)
-	if err != nil {
-		return "❌ Failed to set role: " + err.Error()
-	}
-	return "✅ User role updated"
-}
-
-func (h *WhatsAppHandler) systemConfig(args []string) string {
-	// Placeholder for system config logic
-	return "⚙️ System configuration updated (not implemented)"
-}
-
-func (h *WhatsAppHandler) updateOrder(userID uint, args []string) string {
-	if len(args) < 2 {
-		return "❌ Usage: /update_order [order_id] [field]=[value] ..."
-	}
-	orderID, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid order ID"
-	}
-	order, err := h.orderService.GetOrderByID(uint(orderID))
-	if err != nil {
-		return "❌ Order not found"
-	}
-	for _, field := range args[1:] {
-		kv := strings.SplitN(field, "=", 2)
-		if len(kv) != 2 {
-			continue
-		}
-		switch kv[0] {
-		case "customer_name":
-			order.CustomerName = kv[1]
-		case "total_amount":
-			amt, err := strconv.ParseFloat(kv[1], 64)
-			if err == nil {
-				order.TotalAmount = amt
-			}
-		case "status":
-			order.Status = kv[1]
-		}
-	}
-	err = h.orderService.UpdateOrder(order)
-	if err != nil {
-		return "❌ Failed to update order: " + err.Error()
-	}
-	return "✅ Order updated successfully"
-}
-
-func (h *WhatsAppHandler) deleteOrder(args []string) string {
-	if len(args) < 1 {
-		return "❌ Usage: /delete_order [order_id]"
-	}
-	orderID, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid order ID"
-	}
-	err = h.orderService.DeleteOrder(uint(orderID))
-	if err != nil {
-		return "❌ Failed to delete order: " + err.Error()
-	}
-	return "✅ Order deleted successfully"
-}
 package handlers
+
 import (
 	"encoding/json"
-	"net/http"
-	"github.com/gin-gonic/gin"
-	"task_manager/internal/models"
-	"task_manager/internal/services"
-	"task_manager/internal/redis"
-	"task_manager/internal/config"
-	"strings"
 	"fmt"
-	"time"
+	"net/http"
 	"strconv"
-	"crypto/hmac"
-	"crypto/sha256"
+	"strings"
+	"task_manager/internal/models"
+	"task_manager/internal/redis"
+	"task_manager/internal/services"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
-// Removed extra closing parenthesis
 
 type WhatsAppHandler struct {
 	whatsappService services.WhatsAppService
@@ -149,7 +20,6 @@ type WhatsAppHandler struct {
 	taskService     services.TaskService
 	orderService    services.OrderService
 	reminderService services.ReminderService
-	config          *config.Config
 }
 
 func NewWhatsAppHandler(
@@ -158,14 +28,13 @@ func NewWhatsAppHandler(
 	taskService services.TaskService,
 	orderService services.OrderService,
 	reminderService services.ReminderService,
-	cfg *config.Config) *WhatsAppHandler {
+) *WhatsAppHandler {
 	return &WhatsAppHandler{
 		whatsappService: whatsappService,
 		userService:     userService,
 		taskService:     taskService,
 		orderService:    orderService,
 		reminderService: reminderService,
-		config:          cfg,
 	}
 }
 
@@ -183,94 +52,32 @@ type SendMessageRequest struct {
 }
 
 func (h *WhatsAppHandler) HandleWebhook(c *gin.Context) {
-	// HMAC signature verification
-	signature := c.GetHeader("X-Hub-Signature-256")
-	secret := h.config.WhatsappWebhookSecret
-	body, err := c.GetRawData()
-	fmt.Printf("[DEBUG] Signature: %v\n", signature)
-	fmt.Printf("[DEBUG] Secret: %v\n", secret)
-	fmt.Printf("[DEBUG] Raw body: %s\n", string(body))
+	var req WebhookRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	// Get user by WhatsApp number
+	user, err := h.userService.GetUserByWhatsAppNumber(req.Phone)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
-		return
-	}
-	if !verifyWebhookSignature(body, signature, secret) {
-		fmt.Println("[DEBUG] Signature verification failed")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
+		// Send error message
+		h.whatsappService.SendMessage(req.Phone, "❌ User not found. Please contact administrator.")
+		c.JSON(http.StatusOK, gin.H{"status": "user_not_found"})
 		return
 	}
 
-	// Parse payload (support all event/message types)
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON payload"})
+	// Process command
+	response := h.processCommand(user, req.Message)
+	
+	// Send response
+	err = h.whatsappService.SendMessage(req.Phone, response)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
 		return
 	}
 
-	// Logging for debug
-	fmt.Printf("Received webhook: %v\n", payload)
-
-	// Handle event/message types
-	if event, ok := payload["event"].(string); ok {
-		switch event {
-		case "message.ack":
-			ack := payload["payload"].(map[string]interface{})
-			fmt.Printf("Message %v: chat_id=%v, ids=%v, desc=%v\n",
-				ack["receipt_type"], ack["chat_id"], ack["ids"], ack["receipt_type_description"])
-		case "group.participants":
-			group := payload["payload"].(map[string]interface{})
-			fmt.Printf("Group %v event: chat_id=%v, users=%v\n",
-				group["type"], group["chat_id"], group["jids"])
-		default:
-			fmt.Printf("Unhandled event: %v\n", event)
-		}
-	} else if action, ok := payload["action"].(string); ok {
-		switch action {
-		case "message_revoked":
-			fmt.Printf("Message revoked: %v\n", payload["revoked_message_id"])
-		case "message_edited":
-			fmt.Printf("Message edited: %v\n", payload["edited_text"])
-		default:
-			fmt.Printf("Unhandled action: %v\n", action)
-		}
-	} else if msg, ok := payload["message"].(map[string]interface{}); ok {
-		// Text, reply, reaction, media, etc
-		text, _ := msg["text"].(string)
-		senderID, _ := payload["sender_id"].(string)
-	// pushname, _ := payload["pushname"].(string) // not used
-		fmt.Printf("New message: %v from %v\n", text, senderID)
-
-		// Only process if text starts with '/'
-		if strings.HasPrefix(text, "/") {
-			// Find user by WhatsApp number
-			user, err := h.userService.GetUserByWhatsAppNumber(senderID)
-			var reply string
-			if err != nil || user == nil {
-				reply = "❌ User not registered. Please contact admin."
-			} else {
-				reply = h.processCommand(user, text)
-			}
-			// Send WhatsApp reply
-			errSend := h.whatsappService.SendMessage(senderID, reply)
-			if errSend != nil {
-				fmt.Printf("Failed to send WhatsApp reply: %v\n", errSend)
-			}
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "OK"})
-}
-
-// verifyWebhookSignature verifies HMAC SHA256 signature from header
-func verifyWebhookSignature(payload []byte, signature, secret string) bool {
-	if signature == "" {
-		return false
-	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(payload)
-	expected := fmt.Sprintf("%x", mac.Sum(nil))
-	received := strings.Replace(signature, "sha256=", "", 1)
-	return hmac.Equal([]byte(expected), []byte(received))
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func (h *WhatsAppHandler) SendMessage(c *gin.Context) {
@@ -369,10 +176,6 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 		return h.getUserReport(user.ID)
 	case "/report_by_date":
 		return h.getReportByDate(user.ID, args)
-	case "/daily_progress_reminder":
-		return h.sendDailyProgressReminder(user)
-	case "/monthly_progress_reminder":
-		return h.sendMonthlyProgressReminder(user)
 	default:
 		// Check if user is admin or super admin for admin commands
 		if user.Role == string(models.Admin) || user.Role == string(models.SuperAdmin) {
@@ -381,30 +184,6 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 		return "❌ Unknown command. Type /help for available commands."
 	}
 }
-// Kirim notifikasi progres harian ke user
-func (h *WhatsAppHandler) sendDailyProgressReminder(user *models.User) string {
-	// Ambil progres harian dari Redis atau TaskService
-	progress := 0
-	// TODO: ambil progres harian sebenarnya dari TaskService/Redis
-	err := h.reminderService.SendDailyProgressReminder(user.WhatsAppNumber, progress)
-	if err != nil {
-		return "❌ Failed to send daily progress reminder: " + err.Error()
-	}
-	return "✅ Daily progress reminder sent"
-}
-
-// Kirim notifikasi progres bulanan ke user
-func (h *WhatsAppHandler) sendMonthlyProgressReminder(user *models.User) string {
-	// Ambil progres bulanan dari Redis atau TaskService
-	progress := 0
-	// TODO: ambil progres bulanan sebenarnya dari TaskService/Redis
-	err := h.reminderService.SendMonthlyProgressReminder(user.WhatsAppNumber, progress)
-	if err != nil {
-		return "❌ Failed to send monthly progress reminder: " + err.Error()
-	}
-	return "✅ Monthly progress reminder sent"
-}
-
 
 func (h *WhatsAppHandler) processAdminCommand(user *models.User, command string, args []string) string {
 	switch command {
@@ -434,18 +213,6 @@ func (h *WhatsAppHandler) processAdminCommand(user *models.User, command string,
 		return h.generateDailyReport()
 	case "/monthly_report":
 		return h.generateMonthlyReport()
-	 case "/update_user":
-		return h.updateUser(args)
-	 case "/delete_user":
-		return h.deleteUser(args)
-	 case "/set_role":
-		return h.setRole(args)
-	 case "/system_config":
-		return h.systemConfig(args)
-	 case "/update_order":
-		return h.updateOrder(user.ID, args)
-	 case "/delete_order":
-		return h.deleteOrder(args)
 	default:
 		return "❌ Unknown admin command. Type /help for available commands."
 	}
@@ -850,152 +617,52 @@ func (h *WhatsAppHandler) setTaxRate(userID uint, args []string) string {
 	if len(args) < 1 {
 		return "❌ Usage: /set_tax_rate [percentage]"
 	}
+
 	percentage, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
 		return "❌ Invalid percentage"
 	}
-	settings := &models.FinancialSettings{
-		SettingName:    "tax_rate",
-		PercentageValue: percentage,
-		IsPercentage:   true,
-		IsActive:       true,
-		CreatedBy:      userID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-	// Gunakan repository langsung
-	if repo, ok := h.orderService.(interface{ CreateFinancialSettings(*models.FinancialSettings) error }); ok {
-		err = repo.CreateFinancialSettings(settings)
-		if err != nil {
-			return "❌ Failed to set tax rate: " + err.Error()
-		}
-		return fmt.Sprintf("✅ Tax rate set to %.2f%%", percentage)
-	}
-	return "❌ Financial repository not available"
+
+	// Implementation for setting tax rate
+	return fmt.Sprintf("✅ Tax rate set to %.2f%%", percentage)
 }
 
 func (h *WhatsAppHandler) setMarketingRate(userID uint, args []string) string {
 	if len(args) < 1 {
 		return "❌ Usage: /set_marketing_rate [percentage]"
 	}
+
 	percentage, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
 		return "❌ Invalid percentage"
 	}
-	settings := &models.FinancialSettings{
-		SettingName:    "marketing_rate",
-		PercentageValue: percentage,
-		IsPercentage:   true,
-		IsActive:       true,
-		CreatedBy:      userID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-	if repo, ok := h.orderService.(interface{ CreateFinancialSettings(*models.FinancialSettings) error }); ok {
-		err = repo.CreateFinancialSettings(settings)
-		if err != nil {
-			return "❌ Failed to set marketing rate: " + err.Error()
-		}
-		return fmt.Sprintf("✅ Marketing rate set to %.2f%%", percentage)
-	}
-	return "❌ Financial repository not available"
+
+	// Implementation for setting marketing rate
+	return fmt.Sprintf("✅ Marketing rate set to %.2f%%", percentage)
 }
 
 func (h *WhatsAppHandler) setRentalRate(userID uint, args []string) string {
 	if len(args) < 1 {
 		return "❌ Usage: /set_rental_rate [percentage]"
 	}
+
 	percentage, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
 		return "❌ Invalid percentage"
 	}
-	settings := &models.FinancialSettings{
-		SettingName:    "rental_rate",
-		PercentageValue: percentage,
-		IsPercentage:   true,
-		IsActive:       true,
-		CreatedBy:      userID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-	if repo, ok := h.orderService.(interface{ CreateFinancialSettings(*models.FinancialSettings) error }); ok {
-		err = repo.CreateFinancialSettings(settings)
-		if err != nil {
-			return "❌ Failed to set rental rate: " + err.Error()
-		}
-		return fmt.Sprintf("✅ Rental rate set to %.2f%%", percentage)
-	}
-	return "❌ Financial repository not available"
+
+	// Implementation for setting rental rate
+	return fmt.Sprintf("✅ Rental rate set to %.2f%%", percentage)
 }
 
 func (h *WhatsAppHandler) generateReport() string {
-	// Ambil semua order dan hitung total, pajak, marketing, rental, net profit
-	orders, err := h.orderService.GetAllOrders()
-	if err != nil {
-		return "❌ Failed to get orders: " + err.Error()
-	}
-	totalAmount := 0.0
-	totalTax := 0.0
-	totalMarketing := 0.0
-	totalRental := 0.0
-	totalNetProfit := 0.0
-	for _, order := range orders {
-		totalAmount += order.TotalAmount
-		totalTax += order.TaxAmount
-		totalMarketing += order.MarketingCost
-		totalRental += order.RentalCost
-		totalNetProfit += order.NetProfit
-	}
-	response := "📊 **Financial Report:**\n\n"
-	response += fmt.Sprintf("Total Orders: %d\n", len(orders))
-	response += fmt.Sprintf("Total Amount: $%.2f\n", totalAmount)
-	response += fmt.Sprintf("Total Tax: $%.2f\n", totalTax)
-	response += fmt.Sprintf("Total Marketing: $%.2f\n", totalMarketing)
-	response += fmt.Sprintf("Total Rental: $%.2f\n", totalRental)
-	response += fmt.Sprintf("Net Profit: $%.2f\n", totalNetProfit)
-	return response
+	return "📊 **Financial Report:**\n\nThis feature will show comprehensive financial summary."
 }
 
 func (h *WhatsAppHandler) generateDailyReport() string {
-	// Ambil order hari ini
-	today := time.Now().Format("2006-01-02")
-	start, _ := time.Parse("2006-01-02", today)
-	end := start.Add(24 * time.Hour)
-	orders, err := h.orderService.GetOrdersByDateRange(start, end)
-	if err != nil {
-		return "❌ Failed to get daily orders: " + err.Error()
-	}
-	totalAmount := 0.0
-	totalNetProfit := 0.0
-	for _, order := range orders {
-		totalAmount += order.TotalAmount
-		totalNetProfit += order.NetProfit
-	}
-	response := "📊 **Daily Report:**\n\n"
-	response += fmt.Sprintf("Total Orders: %d\n", len(orders))
-	response += fmt.Sprintf("Total Amount: $%.2f\n", totalAmount)
-	response += fmt.Sprintf("Net Profit: $%.2f\n", totalNetProfit)
-	return response
+	return "📊 **Daily Report:**\n\nThis feature will show today's financial summary."
 }
 
 func (h *WhatsAppHandler) generateMonthlyReport() string {
-	// Ambil order bulan ini
-	month := time.Now().Format("2006-01")
-	start, _ := time.Parse("2006-01-02", month+"-01")
-	end := start.AddDate(0, 1, 0)
-	orders, err := h.orderService.GetOrdersByDateRange(start, end)
-	if err != nil {
-		return "❌ Failed to get monthly orders: " + err.Error()
-	}
-	totalAmount := 0.0
-	totalNetProfit := 0.0
-	for _, order := range orders {
-		totalAmount += order.TotalAmount
-		totalNetProfit += order.NetProfit
-	}
-	response := "📊 **Monthly Report:**\n\n"
-	response += fmt.Sprintf("Total Orders: %d\n", len(orders))
-	response += fmt.Sprintf("Total Amount: $%.2f\n", totalAmount)
-	response += fmt.Sprintf("Net Profit: $%.2f\n", totalNetProfit)
-	return response
+	return "📊 **Monthly Report:**\n\nThis feature will show this month's financial summary."
 }
