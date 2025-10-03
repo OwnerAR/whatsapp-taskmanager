@@ -487,7 +487,7 @@ func (h *WhatsAppHandler) listUsers() string {
 		if user.IsActive {
 			status = "✅ Active"
 		}
-		response += fmt.Sprintf("**%s** (%s)\n", user.Username, user.Email)
+		response += fmt.Sprintf("**ID: %d** - **%s** (%s)\n", user.ID, user.Username, user.Email)
 		response += fmt.Sprintf("Role: %s\n", user.Role)
 		response += fmt.Sprintf("Status: %s\n", status)
 		response += "\n"
@@ -549,12 +549,20 @@ func (h *WhatsAppHandler) getAllOrders() string {
 
 func (h *WhatsAppHandler) assignTask(userID uint, args []string) string {
 	if len(args) < 3 {
-		return "❌ Usage: /assign_task [user_id] [title] [description]"
+		return "❌ Usage: /assign_task [username_or_id] [title] [description]"
 	}
 
-	assignedTo, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid user ID"
+	// Try to parse as user ID first
+	var assignedTo uint
+	if userID, err := strconv.ParseUint(args[0], 10, 32); err == nil {
+		assignedTo = uint(userID)
+	} else {
+		// If not a number, treat as username
+		user, err := h.userService.GetUserByUsername(args[0])
+		if err != nil {
+			return "❌ User not found: " + args[0]
+		}
+		assignedTo = user.ID
 	}
 
 	task := &models.Task{
@@ -577,12 +585,20 @@ func (h *WhatsAppHandler) assignTask(userID uint, args []string) string {
 
 func (h *WhatsAppHandler) createDailyTask(userID uint, args []string) string {
 	if len(args) < 3 {
-		return "❌ Usage: /create_daily_task [user_id] [title] [description]"
+		return "❌ Usage: /create_daily_task [username_or_id] [title] [description]"
 	}
 
-	assignedTo, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid user ID"
+	// Try to parse as user ID first
+	var assignedTo uint
+	if userID, err := strconv.ParseUint(args[0], 10, 32); err == nil {
+		assignedTo = uint(userID)
+	} else {
+		// If not a number, treat as username
+		user, err := h.userService.GetUserByUsername(args[0])
+		if err != nil {
+			return "❌ User not found: " + args[0]
+		}
+		assignedTo = user.ID
 	}
 
 	task := &models.Task{
@@ -604,12 +620,20 @@ func (h *WhatsAppHandler) createDailyTask(userID uint, args []string) string {
 
 func (h *WhatsAppHandler) createMonthlyTask(userID uint, args []string) string {
 	if len(args) < 3 {
-		return "❌ Usage: /create_monthly_task [user_id] [title] [description]"
+		return "❌ Usage: /create_monthly_task [username_or_id] [title] [description]"
 	}
 
-	assignedTo, err := strconv.ParseUint(args[0], 10, 32)
-	if err != nil {
-		return "❌ Invalid user ID"
+	// Try to parse as user ID first
+	var assignedTo uint
+	if userID, err := strconv.ParseUint(args[0], 10, 32); err == nil {
+		assignedTo = uint(userID)
+	} else {
+		// If not a number, treat as username
+		user, err := h.userService.GetUserByUsername(args[0])
+		if err != nil {
+			return "❌ User not found: " + args[0]
+		}
+		assignedTo = user.ID
 	}
 
 	task := &models.Task{
