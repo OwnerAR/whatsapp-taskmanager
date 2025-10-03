@@ -231,6 +231,8 @@ func (h *WhatsAppHandler) processAICommand(user *models.User, message string) st
 		return h.handleStructuredAIAddUser(user, aiResponse)
 	case "create_order":
 		return h.handleStructuredAICreateOrder(user, aiResponse)
+	case "create_order_with_item":
+		return h.handleStructuredAICreateOrderWithItem(user, aiResponse)
 	case "assign_task":
 		return h.handleStructuredAIAssignTask(user, aiResponse)
 	case "view_tasks":
@@ -1315,4 +1317,51 @@ func (h *WhatsAppHandler) handleAIListUsers(user *models.User, aiResponse *AIRes
 	}
 	
 	return response
+}
+
+// handleStructuredAICreateOrderWithItem handles AI-detected create order with item requests
+func (h *WhatsAppHandler) handleStructuredAICreateOrderWithItem(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk membuat order. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Extract data from AI response
+	customerName, _ := aiResponse.Data["customer_name"].(string)
+	totalAmountFloat, _ := aiResponse.Data["total_amount"].(float64)
+	itemName, _ := aiResponse.Data["item_name"].(string)
+	quantityFloat, _ := aiResponse.Data["quantity"].(float64)
+	priceFloat, _ := aiResponse.Data["price"].(float64)
+	
+	// Validate required fields
+	if customerName == "" || totalAmountFloat == 0 || itemName == "" || quantityFloat == 0 || priceFloat == 0 {
+		return "❌ Data tidak lengkap. Pastikan customer_name, total_amount, item_name, quantity, dan price tersedia."
+	}
+	
+	// Generate unique order number
+	orderNumber := fmt.Sprintf("ORD-%d", time.Now().Unix())
+	
+	// Create order
+	order := &models.Order{
+		OrderNumber:  orderNumber,
+		CustomerName: customerName,
+		TotalAmount:  totalAmountFloat,
+		Status:       "pending",
+		OrderDate:    time.Now(),
+		CreatedBy:    user.ID,
+	}
+	
+	err := h.orderService.CreateOrder(order)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal membuat order: %s", err.Error())
+	}
+	
+	// Add item to order
+	err = h.orderService.AddItemToOrder(order.ID, itemName, int(quantityFloat), priceFloat, "")
+	if err != nil {
+		return fmt.Sprintf("❌ Order dibuat tapi gagal menambahkan item: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ Order dengan item berhasil dibuat!\n📦 Order Number: %s\n👤 Customer: %s\n💰 Total: Rp %.0f\n🛒 Item: %s (Qty: %.0f, Harga: Rp %.0f)\n📅 Tanggal: %s", 
+		orderNumber, customerName, totalAmountFloat, itemName, quantityFloat, priceFloat, order.OrderDate.Format("2006-01-02 15:04"))
 }

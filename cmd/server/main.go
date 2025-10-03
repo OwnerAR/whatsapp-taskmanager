@@ -43,13 +43,14 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
+	orderItemRepo := repository.NewOrderItemRepository(db)
 	reminderRepo := repository.NewReminderRepository(db)
 	financialRepo := repository.NewFinancialRepository(db)
 
 	// Initialize services
 	userService := services.NewUserService(userRepo)
 	taskService := services.NewTaskService(taskRepo, redisClient)
-	orderService := services.NewOrderService(orderRepo, financialRepo)
+	orderService := services.NewOrderService(orderRepo, orderItemRepo, financialRepo)
 	whatsappService := services.NewWhatsAppService(whatsappClient, redisClient)
 	reminderService := services.NewReminderService(reminderRepo, whatsappService)
 	aiProcessor := services.NewAIProcessor(cfg.OpenAIAPIKey, redisClient)

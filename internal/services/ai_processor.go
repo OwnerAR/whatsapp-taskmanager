@@ -192,15 +192,18 @@ func (a *aiProcessor) ProcessWithOpenAI(message string, userID string) (string, 
 MESSAGE TYPES TO DETECT:
 1. add_user - "tambahkan user [username] [email] [phone] [role]"
 2. create_order - "buat order [customer_name] [total_amount]" 
-3. assign_task - "assign task [title] [description] to [username]"
-4. view_tasks - "lihat tasks saya", "show my tasks"
-5. view_orders - "lihat orders", "show orders"
-6. list_users - "list user", "lihat users", "show users", "daftar user"
-7. general - greetings, questions, general chat
+3. create_order_with_item - "buat order [customer] total [amount] item [item_name] [quantity] harga [price]"
+4. assign_task - "assign task [title] [description] to [username]"
+5. view_tasks - "lihat tasks saya", "show my tasks"
+6. view_orders - "lihat orders", "show orders"
+7. list_users - "list user", "lihat users", "show users", "daftar user"
+8. add_order_item - "tambah item [order_id] [item_name] [quantity] [price] [description]"
+9. view_order_items - "lihat items order [order_id]", "show order items [order_id]"
+10. general - greetings, questions, general chat
 
 RESPONSE FORMAT (JSON only):
 {
-  "type": "add_user|create_order|assign_task|view_tasks|view_orders|list_users|general",
+  "type": "add_user|create_order|create_order_with_item|assign_task|view_tasks|view_orders|list_users|add_order_item|view_order_items|general",
   "data": {
     "username": "string",
     "email": "string", 
@@ -210,7 +213,11 @@ RESPONSE FORMAT (JSON only):
     "total_amount": "number",
     "title": "string",
     "description": "string",
-    "assigned_to": "string"
+    "assigned_to": "string",
+    "order_id": "number",
+    "item_name": "string",
+    "quantity": "number",
+    "price": "number"
   },
   "message": "Friendly response message"
 }
@@ -222,8 +229,17 @@ Output: {"type":"add_user","data":{"username":"ega","email":"egatryagung@gmail.c
 Input: "buat order John Doe 1000000"
 Output: {"type":"create_order","data":{"customer_name":"John Doe","total_amount":1000000},"message":"I'll create an order for John Doe with total 1000000"}
 
+Input: "buatkan order jhon total 10000 item ayam goreng 1 harga 10000"
+Output: {"type":"create_order_with_item","data":{"customer_name":"jhon","total_amount":10000,"item_name":"ayam goreng","quantity":1,"price":10000},"message":"I'll create an order for jhon with ayam goreng item"}
+
 Input: "list user"
 Output: {"type":"list_users","data":{},"message":"I'll show you the list of users"}
+
+Input: "tambah item 1 Laptop 2 5000000 Gaming laptop"
+Output: {"type":"add_order_item","data":{"order_id":1,"item_name":"Laptop","quantity":2,"price":5000000,"description":"Gaming laptop"},"message":"I'll add 2 Laptop items to order 1"}
+
+Input: "lihat items order 1"
+Output: {"type":"view_order_items","data":{"order_id":1},"message":"I'll show you the items for order 1"}
 
 Input: "halo"
 Output: {"type":"general","data":{},"message":"Hello! How can I help you today?"}
