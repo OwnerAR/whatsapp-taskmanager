@@ -187,7 +187,6 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 		// Parse command
 		parts := strings.Fields(message)
 		command := parts[0]
-		args := parts[1:]
 		
 		// Only handle specific system commands directly
 		switch command {
@@ -213,7 +212,7 @@ func (h *WhatsAppHandler) processAICommand(user *models.User, message string) st
 	userID := fmt.Sprintf("%d", user.ID)
 	
 	// Process message with AI
-	messageType, result, err := h.aiProcessor.ProcessWithOpenAI(message, userID)
+	_, result, err := h.aiProcessor.ProcessWithOpenAI(message, userID)
 	if err != nil {
 		// Fallback to basic processing if AI fails
 		return "🤖 I'm having trouble understanding your message. Please try using a command like /help for available options."
