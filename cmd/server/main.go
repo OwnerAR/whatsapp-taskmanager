@@ -5,7 +5,7 @@ import (
 	"task_manager/internal/config"
 	"task_manager/internal/database"
 	"task_manager/internal/handlers"
-	"task_manager/internal/models"
+	"task_manager/internal/migrations"
 	"task_manager/internal/redis"
 	"task_manager/internal/repository"
 	"task_manager/internal/services"
@@ -24,39 +24,10 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// Force recreate tables to ensure proper schema
-	log.Println("Ensuring database schema is up to date...")
-	err = db.Migrator().DropTable(
-		&models.User{},
-		&models.Task{},
-		&models.TaskProgress{},
-		&models.DailyTask{},
-		&models.MonthlyTask{},
-		&models.Order{},
-		&models.Reminder{},
-		&models.FinancialSettings{},
-		&models.CalculationHistory{},
-		&models.ReportQuery{},
-	)
+	// Run database migrations
+	err = migrations.RunMigrations(db)
 	if err != nil {
-		log.Printf("Warning: Error dropping tables: %v", err)
-	}
-
-	// Recreate tables with proper schema
-	err = db.AutoMigrate(
-		&models.User{},
-		&models.Task{},
-		&models.TaskProgress{},
-		&models.DailyTask{},
-		&models.MonthlyTask{},
-		&models.Order{},
-		&models.Reminder{},
-		&models.FinancialSettings{},
-		&models.CalculationHistory{},
-		&models.ReportQuery{},
-	)
-	if err != nil {
-		log.Fatal("Failed to migrate database:", err)
+		log.Fatal("Failed to run migrations:", err)
 	}
 
 	// Initialize Redis
