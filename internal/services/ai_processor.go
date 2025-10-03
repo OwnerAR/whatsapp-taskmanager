@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"task_manager/internal/models"
+	"task_manager/internal/redis"
 	"time"
 )
 
@@ -18,15 +19,28 @@ type AIProcessor interface {
 	ParseTaskMessage(message string) (*models.Task, error)
 	ExtractOrderItems(message string) ([]models.OrderItem, error)
 	ProcessWhatsAppMessage(message string) (string, interface{}, error)
-	ProcessWithOpenAI(message string) (string, interface{}, error)
+	ProcessWithOpenAI(message string, userID string) (string, interface{}, error)
+	GetChatHistory(userID string) ([]ChatMessage, error)
+	SaveChatMessage(userID string, role string, content string) error
+	ClearChatHistory(userID string) error
+}
+
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	Time    int64  `json:"time"`
 }
 
 type aiProcessor struct {
 	apiKey string
+	redis  *redis.Client
 }
 
-func NewAIProcessor(apiKey string) AIProcessor {
-	return &aiProcessor{apiKey: apiKey}
+func NewAIProcessor(apiKey string, redisClient *redis.Client) AIProcessor {
+	return &aiProcessor{
+		apiKey: apiKey,
+		redis:  redisClient,
+	}
 }
 
 // ParseOrderMessage processes natural language order messages
@@ -155,33 +169,55 @@ func (a *aiProcessor) ProcessWhatsAppMessage(message string) (string, interface{
 	return "unknown", nil, fmt.Errorf("unable to process message type")
 }
 
-// ProcessWithOpenAI processes messages using OpenAI API
-func (a *aiProcessor) ProcessWithOpenAI(message string) (string, interface{}, error) {
+// ProcessWithOpenAI processes messages using OpenAI API with chat history
+func (a *aiProcessor) ProcessWithOpenAI(message string, userID string) (string, interface{}, error) {
 	if a.apiKey == "" || a.apiKey == "your_openai_api_key" {
 		// Fallback to regex processing if no API key
 		return a.ProcessWhatsAppMessage(message)
 	}
 
+	// Get chat history for context
+	chatHistory, err := a.GetChatHistory(userID)
+	if err != nil {
+		// If error getting history, continue without context
+		chatHistory = []ChatMessage{}
+	}
+
+	// Build messages array with system prompt and chat history
+	messages := []map[string]string{
+		{
+			"role": "system",
+			"content": `You are an AI assistant that processes WhatsApp messages for a task management system. 
+			Extract structured data from natural language messages.
+			
+			For orders, extract: customer_name, total_amount, and items with quantity and price.
+			For tasks, extract: title, description, assigned_to, priority.
+			
+			You have access to the last 3 messages for context. Use this context to better understand the user's intent.
+			
+			Return JSON format only.`,
+		},
+	}
+
+	// Add chat history (in reverse order to maintain chronological order)
+	for i := len(chatHistory) - 1; i >= 0; i-- {
+		messages = append(messages, map[string]string{
+			"role":    chatHistory[i].Role,
+			"content": chatHistory[i].Content,
+		})
+	}
+
+	// Add current message
+	messages = append(messages, map[string]string{
+		"role":    "user",
+		"content": message,
+	})
+
 	// OpenAI API request
 	requestBody := map[string]interface{}{
-		"model": "gpt-3.5-turbo",
-		"messages": []map[string]string{
-			{
-				"role": "system",
-				"content": `You are an AI assistant that processes WhatsApp messages for a task management system. 
-				Extract structured data from natural language messages.
-				
-				For orders, extract: customer_name, total_amount, and items with quantity and price.
-				For tasks, extract: title, description, assigned_to, priority.
-				
-				Return JSON format only.`,
-			},
-			{
-				"role": "user",
-				"content": message,
-			},
-		},
-		"max_tokens": 500,
+		"model":       "gpt-3.5-turbo",
+		"messages":    messages,
+		"max_tokens":  500,
 		"temperature": 0.1,
 	}
 
@@ -229,6 +265,10 @@ func (a *aiProcessor) ProcessWithOpenAI(message string) (string, interface{}, er
 	// Parse the AI response
 	content := openAIResponse.Choices[0].Message.Content
 	
+	// Save user message and AI response to chat history
+	a.SaveChatMessage(userID, "user", message)
+	a.SaveChatMessage(userID, "assistant", content)
+	
 	// Try to determine if it's an order or task based on content
 	if strings.Contains(strings.ToLower(content), "order") || strings.Contains(strings.ToLower(content), "total") {
 		return "order", content, nil
@@ -237,4 +277,68 @@ func (a *aiProcessor) ProcessWithOpenAI(message string) (string, interface{}, er
 	}
 
 	return "unknown", content, nil
+}
+
+// GetChatHistory retrieves the last 3 chat messages for a user
+func (a *aiProcessor) GetChatHistory(userID string) ([]ChatMessage, error) {
+	key := fmt.Sprintf("ai_chat_history:%s", userID)
+	
+	// Get all messages from Redis list
+	messages, err := a.redis.LRange(key, 0, 2).Result()
+	if err != nil {
+		return nil, err
+	}
+	
+	var chatHistory []ChatMessage
+	for _, msg := range messages {
+		var chatMsg ChatMessage
+		if err := json.Unmarshal([]byte(msg), &chatMsg); err != nil {
+			continue
+		}
+		chatHistory = append(chatHistory, chatMsg)
+	}
+	
+	return chatHistory, nil
+}
+
+// SaveChatMessage saves a chat message to Redis
+func (a *aiProcessor) SaveChatMessage(userID string, role string, content string) error {
+	key := fmt.Sprintf("ai_chat_history:%s", userID)
+	
+	chatMsg := ChatMessage{
+		Role:    role,
+		Content: content,
+		Time:    time.Now().Unix(),
+	}
+	
+	msgJSON, err := json.Marshal(chatMsg)
+	if err != nil {
+		return err
+	}
+	
+	// Add to the beginning of the list
+	err = a.redis.LPush(key, msgJSON).Err()
+	if err != nil {
+		return err
+	}
+	
+	// Keep only the last 3 messages
+	err = a.redis.LTrim(key, 0, 2).Err()
+	if err != nil {
+		return err
+	}
+	
+	// Set expiration to 24 hours
+	err = a.redis.Expire(key, 24*time.Hour).Err()
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+// ClearChatHistory clears chat history for a user
+func (a *aiProcessor) ClearChatHistory(userID string) error {
+	key := fmt.Sprintf("ai_chat_history:%s", userID)
+	return a.redis.Del(key).Err()
 }

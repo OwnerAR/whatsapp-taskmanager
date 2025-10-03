@@ -19,6 +19,7 @@ type WhatsAppHandler struct {
 	taskService     services.TaskService
 	orderService    services.OrderService
 	reminderService services.ReminderService
+	aiProcessor     services.AIProcessor
 }
 
 func NewWhatsAppHandler(
@@ -27,6 +28,7 @@ func NewWhatsAppHandler(
 	taskService services.TaskService,
 	orderService services.OrderService,
 	reminderService services.ReminderService,
+	aiProcessor services.AIProcessor,
 ) *WhatsAppHandler {
 	return &WhatsAppHandler{
 		whatsappService: whatsappService,
@@ -34,6 +36,7 @@ func NewWhatsAppHandler(
 		taskService:     taskService,
 		orderService:    orderService,
 		reminderService: reminderService,
+		aiProcessor:     aiProcessor,
 	}
 }
 
@@ -176,6 +179,10 @@ func (h *WhatsAppHandler) processCommand(user *models.User, message string) stri
 	switch command {
 	case "/help":
 		return h.getHelpMessage(user.Role)
+	case "/clear_history":
+		return h.clearChatHistory(user.ID)
+	case "/show_history":
+		return h.showChatHistory(user.ID)
 	case "/my_tasks":
 		return h.getUserTasks(user.ID)
 	case "/my_daily_tasks":
@@ -249,6 +256,8 @@ func (h *WhatsAppHandler) getHelpMessage(role string) string {
 /view_orders - View related orders
 /my_report - View personal financial reports
 /report_by_date [start_date] [end_date] - Generate reports by date range
+/clear_history - Clear AI chat history
+/show_history - Show AI chat history
 /help - Show this help message
 `
 
@@ -296,6 +305,39 @@ func (h *WhatsAppHandler) getHelpMessage(role string) string {
 	}
 
 	return baseCommands
+}
+
+func (h *WhatsAppHandler) clearChatHistory(userID uint) string {
+	// Clear chat history for AI memory
+	err := h.aiProcessor.ClearChatHistory(fmt.Sprintf("%d", userID))
+	if err != nil {
+		return "❌ Failed to clear chat history: " + err.Error()
+	}
+	return "✅ Chat history cleared successfully"
+}
+
+func (h *WhatsAppHandler) showChatHistory(userID uint) string {
+	// Show chat history for AI memory
+	history, err := h.aiProcessor.GetChatHistory(fmt.Sprintf("%d", userID))
+	if err != nil {
+		return "❌ Failed to get chat history: " + err.Error()
+	}
+	
+	if len(history) == 0 {
+		return "📝 **Chat History:**\n\nNo chat history found."
+	}
+	
+	response := "📝 **Chat History (Last 3 messages):**\n\n"
+	for i, msg := range history {
+		role := "👤 User"
+		if msg.Role == "assistant" {
+			role = "🤖 AI"
+		}
+		response += fmt.Sprintf("%d. %s: %s\n", i+1, role, msg.Content)
+		response += fmt.Sprintf("   Time: %s\n\n", time.Unix(msg.Time, 0).Format("2006-01-02 15:04:05"))
+	}
+	
+	return response
 }
 
 func (h *WhatsAppHandler) getUserTasks(userID uint) string {

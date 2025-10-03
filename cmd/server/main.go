@@ -52,10 +52,10 @@ func main() {
 	orderService := services.NewOrderService(orderRepo, financialRepo)
 	whatsappService := services.NewWhatsAppService(whatsappClient, redisClient)
 	reminderService := services.NewReminderService(reminderRepo, whatsappService)
-	aiProcessor := services.NewAIProcessor(cfg.OpenAIAPIKey)
+	aiProcessor := services.NewAIProcessor(cfg.OpenAIAPIKey, redisClient)
 
 	// Initialize handlers
-	whatsappHandler := handlers.NewWhatsAppHandler(whatsappService, userService, taskService, orderService, reminderService)
+	whatsappHandler := handlers.NewWhatsAppHandler(whatsappService, userService, taskService, orderService, reminderService, aiProcessor)
 	apiHandler := handlers.NewAPIHandler(userService, taskService, orderService)
 
 	// Setup routes
