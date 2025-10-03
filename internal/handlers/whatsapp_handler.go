@@ -362,7 +362,7 @@ func (h *WhatsAppHandler) updateTaskProgress(userID uint, args []string) string 
 		return "❌ Invalid progress percentage (0-100)"
 	}
 
-	err := h.taskService.UpdateTaskProgress(uint(taskID), progress, false, "", userID)
+	err = h.taskService.UpdateTaskProgress(uint(taskID), progress, false, "", userID)
 	if err != nil {
 		return "❌ Failed to update progress: " + err.Error()
 	}
@@ -380,7 +380,7 @@ func (h *WhatsAppHandler) markTaskComplete(userID uint, args []string) string {
 		return "❌ Invalid task ID"
 	}
 
-	err := h.taskService.UpdateTaskProgress(uint(taskID), 100, true, "Task completed", userID)
+	err = h.taskService.UpdateTaskProgress(uint(taskID), 100, true, "Task completed", userID)
 	if err != nil {
 		return "❌ Failed to mark task as complete: " + err.Error()
 	}
