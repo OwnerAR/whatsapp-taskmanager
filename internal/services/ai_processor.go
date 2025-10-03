@@ -194,8 +194,8 @@ MESSAGE TYPES TO DETECT:
 2. create_order - "buat order [customer_name] [total_amount]" 
 3. create_order_with_item - "buat order [customer] total [amount] item [item_name] [quantity] harga [price]"
 4. assign_task - "assign task [title] [description] to [username]"
-5. view_tasks - "lihat tasks saya", "show my tasks"
-6. view_orders - "lihat orders", "show orders"
+5. view_tasks - "lihat tasks saya", "lihat task saya", "show my tasks", "show my task"
+6. view_orders - "lihat orders", "lihat order", "show orders", "show order", "list order", "list orders"
 7. list_users - "list user", "lihat users", "show users", "daftar user"
 8. add_order_item - "tambah item [order_id] [item_name] [quantity] [price] [description]"
 9. view_order_items - "lihat items order [order_id]", "show order items [order_id]"
@@ -234,6 +234,12 @@ Output: {"type":"create_order_with_item","data":{"customer_name":"jhon","total_a
 
 Input: "list user"
 Output: {"type":"list_users","data":{},"message":"I'll show you the list of users"}
+
+Input: "list order"
+Output: {"type":"view_orders","data":{},"message":"I'll show you the list of orders"}
+
+Input: "lihat order"
+Output: {"type":"view_orders","data":{},"message":"I'll show you the list of orders"}
 
 Input: "tambah item 1 Laptop 2 5000000 Gaming laptop"
 Output: {"type":"add_order_item","data":{"order_id":1,"item_name":"Laptop","quantity":2,"price":5000000,"description":"Gaming laptop"},"message":"I'll add 2 Laptop items to order 1"}
