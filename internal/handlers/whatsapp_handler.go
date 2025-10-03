@@ -207,6 +207,8 @@ func (h *WhatsAppHandler) processAdminCommand(user *models.User, command string,
 		return h.addUser(user, args)
 	case "/list_users":
 		return h.listUsers()
+	case "/list_tasks":
+		return h.listAllTasks()
 	case "/create_order":
 		return h.createOrder(user.ID, args)
 	case "/view_orders":
@@ -250,16 +252,40 @@ func (h *WhatsAppHandler) getHelpMessage(role string) string {
 /help - Show this help message
 `
 
-	if role == string(models.Admin) || role == string(models.SuperAdmin) {
+	if role == string(models.Admin) {
 		baseCommands += `
 **Admin Commands:**
-/add_user [username] [email] [phone] [role] - Add new user
-/list_users - View all users
 /create_order [customer_name] [total_amount] - Create new order
 /view_orders - List all orders
-/assign_task [user_id] [title] [description] - Assign task to user
-/create_daily_task [user_id] [title] [description] - Create daily recurring task
-/create_monthly_task [user_id] [title] [description] - Create monthly recurring task
+/assign_task [username_or_id] [title] [description] - Assign task to user
+/create_daily_task [username_or_id] [title] [description] - Create daily recurring task
+/create_monthly_task [username_or_id] [title] [description] - Create monthly recurring task
+/set_tax_rate [percentage] - Set tax percentage
+/set_marketing_rate [percentage] - Set marketing cost percentage
+/set_rental_rate [percentage] - Set rental cost percentage
+/generate_report - Generate financial reports
+/daily_report - Generate daily report
+/monthly_report - Generate monthly report
+`
+	}
+
+	if role == string(models.SuperAdmin) {
+		baseCommands += `
+**Super Admin Commands:**
+/add_user [username] [email] [phone] [role] - Add new user
+/list_users - View all users (shows User ID for reference)
+/list_tasks - View all tasks in the system
+/update_user - Update user information
+/delete_user - Delete user
+/set_role - Change user role
+/system_config - System configuration
+
+**Admin Commands:**
+/create_order [customer_name] [total_amount] - Create new order
+/view_orders - List all orders
+/assign_task [username_or_id] [title] [description] - Assign task to user
+/create_daily_task [username_or_id] [title] [description] - Create daily recurring task
+/create_monthly_task [username_or_id] [title] [description] - Create monthly recurring task
 /set_tax_rate [percentage] - Set tax percentage
 /set_marketing_rate [percentage] - Set marketing cost percentage
 /set_rental_rate [percentage] - Set rental cost percentage
@@ -490,6 +516,60 @@ func (h *WhatsAppHandler) listUsers() string {
 		response += fmt.Sprintf("**ID: %d** - **%s** (%s)\n", user.ID, user.Username, user.Email)
 		response += fmt.Sprintf("Role: %s\n", user.Role)
 		response += fmt.Sprintf("Status: %s\n", status)
+		response += "\n"
+	}
+
+	return response
+}
+
+func (h *WhatsAppHandler) listAllTasks() string {
+	tasks, err := h.taskService.GetAllTasks()
+	if err != nil {
+		return "❌ Failed to get tasks: " + err.Error()
+	}
+
+	if len(tasks) == 0 {
+		return "📝 **All Tasks:**\n\nNo tasks found."
+	}
+
+	response := "📝 **All Tasks:**\n\n"
+	for _, task := range tasks {
+		status := "❌ Pending"
+		if task.Status == string(models.InProgress) {
+			status = "🔄 In Progress"
+		} else if task.Status == string(models.Completed) {
+			status = "✅ Completed"
+		} else if task.Status == string(models.Overdue) {
+			status = "⚠️ Overdue"
+		}
+
+		priority := "🟡 Medium"
+		if task.Priority == string(models.High) {
+			priority = "🔴 High"
+		} else if task.Priority == string(models.Low) {
+			priority = "🟢 Low"
+		} else if task.Priority == string(models.Urgent) {
+			priority = "🚨 Urgent"
+		}
+
+		implemented := "❌ Not Implemented"
+		if task.IsImplemented {
+			implemented = "✅ Implemented"
+		}
+
+		response += fmt.Sprintf("**ID: %d** - **%s**\n", task.ID, task.Title)
+		response += fmt.Sprintf("Description: %s\n", task.Description)
+		response += fmt.Sprintf("Assigned To: User ID %d\n", task.AssignedTo)
+		response += fmt.Sprintf("Status: %s\n", status)
+		response += fmt.Sprintf("Priority: %s\n", priority)
+		response += fmt.Sprintf("Progress: %d%%\n", task.CompletionPercentage)
+		response += fmt.Sprintf("Implemented: %s\n", implemented)
+		if task.DueDate != nil {
+			response += fmt.Sprintf("Due Date: %s\n", task.DueDate.Format("2006-01-02 15:04"))
+		}
+		if task.CompletedAt != nil {
+			response += fmt.Sprintf("Completed: %s\n", task.CompletedAt.Format("2006-01-02 15:04"))
+		}
 		response += "\n"
 	}
 
