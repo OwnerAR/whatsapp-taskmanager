@@ -47,7 +47,7 @@ func NewAIProcessor(apiKey string, redisClient *redis.Client) AIProcessor {
 func (a *aiProcessor) ParseOrderMessage(message string) (*models.Order, []models.OrderItem, error) {
 	// Extract order information using regex patterns
 	order := &models.Order{}
-	var items []models.OrderItem{}
+	var items []models.OrderItem
 	
 	// Extract total amount
 	totalRegex := regexp.MustCompile(`(?i)total[:\s]*(\d+(?:\.\d+)?)`)
@@ -70,7 +70,7 @@ func (a *aiProcessor) ParseOrderMessage(message string) (*models.Order, []models
 	}
 	
 	// Set default values
-	order.Status = string(models.Pending)
+	order.Status = "pending"
 	order.OrderDate = time.Now()
 	
 	return order, items, nil
@@ -84,7 +84,7 @@ func (a *aiProcessor) ExtractOrderItems(message string) ([]models.OrderItem, err
 	itemRegex := regexp.MustCompile(`(?i)([a-zA-Z\s]+),\s*qty\s*(\d+)\s*x\s*(\d+(?:\.\d+)?)`)
 	matches := itemRegex.FindAllStringSubmatch(message, -1)
 	
-	for i, match := range matches {
+	for _, match := range matches {
 		if len(match) < 4 {
 			continue
 		}

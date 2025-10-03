@@ -173,6 +173,32 @@ func (c *Client) GetMonthlyTaskProgress(taskID uint, monthYear string) (int, err
 	return val, nil
 }
 
+// Chat history management for AI
+func (c *Client) LRange(key string, start, stop int64) *redis.StringSliceCmd {
+	ctx := context.Background()
+	return c.rdb.LRange(ctx, key, start, stop)
+}
+
+func (c *Client) LPush(key string, values ...interface{}) *redis.IntCmd {
+	ctx := context.Background()
+	return c.rdb.LPush(ctx, key, values...)
+}
+
+func (c *Client) LTrim(key string, start, stop int64) *redis.StatusCmd {
+	ctx := context.Background()
+	return c.rdb.LTrim(ctx, key, start, stop)
+}
+
+func (c *Client) Expire(key string, expiration time.Duration) *redis.BoolCmd {
+	ctx := context.Background()
+	return c.rdb.Expire(ctx, key, expiration)
+}
+
+func (c *Client) Del(keys ...string) *redis.IntCmd {
+	ctx := context.Background()
+	return c.rdb.Del(ctx, keys...)
+}
+
 // Close Redis connection
 func (c *Client) Close() error {
 	return c.rdb.Close()
