@@ -328,8 +328,8 @@ func (a *aiProcessor) SaveChatMessage(userID string, role string, content string
 		return err
 	}
 	
-	// Set expiration to 24 hours
-	err = a.redis.Expire(key, 24*time.Hour).Err()
+	// Set expiration to 10 minutes
+	err = a.redis.Expire(key, 10*time.Minute).Err()
 	if err != nil {
 		return err
 	}

@@ -327,7 +327,7 @@ func (h *WhatsAppHandler) showChatHistory(userID uint) string {
 		return "📝 **Chat History:**\n\nNo chat history found."
 	}
 	
-	response := "📝 **Chat History (Last 3 messages):**\n\n"
+	response := "📝 **Chat History (Last 3 messages, expires in 10 minutes):**\n\n"
 	for i, msg := range history {
 		role := "👤 User"
 		if msg.Role == "assistant" {
