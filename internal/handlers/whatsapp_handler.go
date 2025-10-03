@@ -362,7 +362,7 @@ func (h *WhatsAppHandler) updateTaskProgress(userID uint, args []string) string 
 		return "❌ Invalid progress percentage (0-100)"
 	}
 
-	err = h.taskService.UpdateTaskProgress(uint(taskID), progress, false, "", userID)
+	err := h.taskService.UpdateTaskProgress(uint(taskID), progress, false, "", userID)
 	if err != nil {
 		return "❌ Failed to update progress: " + err.Error()
 	}
@@ -380,7 +380,7 @@ func (h *WhatsAppHandler) markTaskComplete(userID uint, args []string) string {
 		return "❌ Invalid task ID"
 	}
 
-	err = h.taskService.UpdateTaskProgress(uint(taskID), 100, true, "Task completed", userID)
+	err := h.taskService.UpdateTaskProgress(uint(taskID), 100, true, "Task completed", userID)
 	if err != nil {
 		return "❌ Failed to mark task as complete: " + err.Error()
 	}
@@ -575,7 +575,7 @@ func (h *WhatsAppHandler) assignTask(userID uint, args []string) string {
 		CreatedBy:   userID,
 	}
 
-	err = h.taskService.CreateTask(task)
+	err := h.taskService.CreateTask(task)
 	if err != nil {
 		return "❌ Failed to create task: " + err.Error()
 	}
@@ -610,7 +610,7 @@ func (h *WhatsAppHandler) createDailyTask(userID uint, args []string) string {
 		CreatedBy:   userID,
 	}
 
-	err = h.taskService.CreateDailyTask(task)
+	err := h.taskService.CreateDailyTask(task)
 	if err != nil {
 		return "❌ Failed to create daily task: " + err.Error()
 	}
@@ -645,7 +645,7 @@ func (h *WhatsAppHandler) createMonthlyTask(userID uint, args []string) string {
 		CreatedBy:   userID,
 	}
 
-	err = h.taskService.CreateMonthlyTask(task)
+	err := h.taskService.CreateMonthlyTask(task)
 	if err != nil {
 		return "❌ Failed to create monthly task: " + err.Error()
 	}
