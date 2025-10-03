@@ -38,11 +38,17 @@ func NewWhatsAppHandler(
 }
 
 type WebhookRequest struct {
-	Phone   string `json:"phone"`
-	Message string `json:"message"`
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Time    string `json:"time"`
+	SenderID  string `json:"sender_id"`
+	ChatID    string `json:"chat_id"`
+	From      string `json:"from"`
+	Timestamp string `json:"timestamp"`
+	Pushname  string `json:"pushname"`
+	Message   struct {
+		Text         string `json:"text"`
+		ID           string `json:"id"`
+		RepliedID    string `json:"replied_id"`
+		QuotedMessage string `json:"quoted_message"`
+	} `json:"message"`
 }
 
 type SendMessageRequest struct {
@@ -57,20 +63,31 @@ func (h *WhatsAppHandler) HandleWebhook(c *gin.Context) {
 		return
 	}
 
+	// Extract phone number from 'from' field (format: 628123456789@s.whatsapp.net)
+	phoneNumber := req.From
+	if phoneNumber == "" {
+		phoneNumber = req.SenderID
+	}
+	
+	// Remove @s.whatsapp.net suffix if present
+	if strings.Contains(phoneNumber, "@s.whatsapp.net") {
+		phoneNumber = strings.Replace(phoneNumber, "@s.whatsapp.net", "", 1)
+	}
+
 	// Get user by WhatsApp number
-	user, err := h.userService.GetUserByWhatsAppNumber(req.Phone)
+	user, err := h.userService.GetUserByWhatsAppNumber(phoneNumber)
 	if err != nil {
 		// Send error message
-		h.whatsappService.SendMessage(req.Phone, "❌ User not found. Please contact administrator.")
+		h.whatsappService.SendMessage(phoneNumber, "❌ User not found. Please contact administrator.")
 		c.JSON(http.StatusOK, gin.H{"status": "user_not_found"})
 		return
 	}
 
 	// Process command
-	response := h.processCommand(user, req.Message)
+	response := h.processCommand(user, req.Message.Text)
 	
 	// Send response
-	err = h.whatsappService.SendMessage(req.Phone, response)
+	err = h.whatsappService.SendMessage(phoneNumber, response)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send message"})
 		return
