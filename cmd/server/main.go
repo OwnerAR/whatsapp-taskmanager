@@ -47,7 +47,7 @@ func main() {
 	reminderService := services.NewReminderService(reminderRepo, whatsappService)
 
 	// Initialize handlers
-	whatsappHandler := handlers.NewWhatsAppHandler(whatsappService, userService, taskService, orderService, reminderService, cfg)
+	whatsappHandler := handlers.NewWhatsAppHandler(whatsappService, userService, taskService, orderService, reminderService)
 	apiHandler := handlers.NewAPIHandler(userService, taskService, orderService)
 
 	// Setup routes
