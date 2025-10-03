@@ -1,7 +1,11 @@
 package services
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,12 +17,16 @@ type AIProcessor interface {
 	ParseOrderMessage(message string) (*models.Order, []models.OrderItem, error)
 	ParseTaskMessage(message string) (*models.Task, error)
 	ExtractOrderItems(message string) ([]models.OrderItem, error)
+	ProcessWhatsAppMessage(message string) (string, interface{}, error)
+	ProcessWithOpenAI(message string) (string, interface{}, error)
 }
 
-type aiProcessor struct{}
+type aiProcessor struct {
+	apiKey string
+}
 
-func NewAIProcessor() AIProcessor {
-	return &aiProcessor{}
+func NewAIProcessor(apiKey string) AIProcessor {
+	return &aiProcessor{apiKey: apiKey}
 }
 
 // ParseOrderMessage processes natural language order messages
@@ -145,4 +153,88 @@ func (a *aiProcessor) ProcessWhatsAppMessage(message string) (string, interface{
 	}
 	
 	return "unknown", nil, fmt.Errorf("unable to process message type")
+}
+
+// ProcessWithOpenAI processes messages using OpenAI API
+func (a *aiProcessor) ProcessWithOpenAI(message string) (string, interface{}, error) {
+	if a.apiKey == "" || a.apiKey == "your_openai_api_key" {
+		// Fallback to regex processing if no API key
+		return a.ProcessWhatsAppMessage(message)
+	}
+
+	// OpenAI API request
+	requestBody := map[string]interface{}{
+		"model": "gpt-3.5-turbo",
+		"messages": []map[string]string{
+			{
+				"role": "system",
+				"content": `You are an AI assistant that processes WhatsApp messages for a task management system. 
+				Extract structured data from natural language messages.
+				
+				For orders, extract: customer_name, total_amount, and items with quantity and price.
+				For tasks, extract: title, description, assigned_to, priority.
+				
+				Return JSON format only.`,
+			},
+			{
+				"role": "user",
+				"content": message,
+			},
+		},
+		"max_tokens": 500,
+		"temperature": 0.1,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", nil, err
+	}
+
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var openAIResponse struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.Unmarshal(body, &openAIResponse); err != nil {
+		return "", nil, err
+	}
+
+	if len(openAIResponse.Choices) == 0 {
+		return "", nil, fmt.Errorf("no response from OpenAI")
+	}
+
+	// Parse the AI response
+	content := openAIResponse.Choices[0].Message.Content
+	
+	// Try to determine if it's an order or task based on content
+	if strings.Contains(strings.ToLower(content), "order") || strings.Contains(strings.ToLower(content), "total") {
+		return "order", content, nil
+	} else if strings.Contains(strings.ToLower(content), "task") || strings.Contains(strings.ToLower(content), "create") {
+		return "task", content, nil
+	}
+
+	return "unknown", content, nil
 }

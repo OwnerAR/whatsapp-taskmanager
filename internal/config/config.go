@@ -16,6 +16,7 @@ type Config struct {
 	WhatsAppPassword string
 	WhatsAppPath     string
 	WhatsappWebhookSecret string
+	OpenAIAPIKey     string
 	ServerPort       string
 	SessionTimeout   int
 	CacheTTL         int
@@ -34,6 +35,7 @@ func Load() *Config {
 		WhatsAppPassword: getEnv("WHATSAPP_PASSWORD", "your_whatsapp_password"),
 		WhatsAppPath:     getEnv("WHATSAPP_PATH", "your_whatsapp_path"),
 		WhatsappWebhookSecret: getEnv("WHATSAPP_WEBHOOK_SECRET", "superadmin"),
+		OpenAIAPIKey:     getEnv("OPENAI_API_KEY", "your_openai_api_key"),
 		ServerPort:       getEnv("SERVER_PORT", "8080"),
 		SessionTimeout:   getEnvAsInt("SESSION_TIMEOUT", 3600),
 		CacheTTL:         getEnvAsInt("CACHE_TTL", 1800),
