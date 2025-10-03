@@ -245,6 +245,22 @@ func (h *WhatsAppHandler) processAICommand(user *models.User, message string) st
 		return h.handleAICreateReminder(user, aiResponse)
 	case "view_reminders":
 		return h.handleAIViewReminders(user, aiResponse)
+	case "list_tasks":
+		return h.handleAIListTasks(user, aiResponse)
+	case "update_progress":
+		return h.handleAIUpdateProgress(user, aiResponse)
+	case "mark_complete":
+		return h.handleAIMarkComplete(user, aiResponse)
+	case "my_report":
+		return h.handleAIMyReport(user, aiResponse)
+	case "report_by_date":
+		return h.handleAIReportByDate(user, aiResponse)
+	case "clear_history":
+		return h.clearChatHistory(user.ID)
+	case "show_history":
+		return h.showChatHistory(user.ID)
+	case "help":
+		return h.getHelpMessage(user.Role)
 	case "general":
 		// Check if AI suggests help command
 		if strings.Contains(strings.ToLower(aiResponse.Message), "help") || 
@@ -1441,4 +1457,66 @@ func (h *WhatsAppHandler) handleAIViewReminders(user *models.User, aiResponse *A
 	}
 	
 	return response
+}
+
+// handleAIListTasks handles list_tasks AI response
+func (h *WhatsAppHandler) handleAIListTasks(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has SuperAdmin access
+	if user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk melihat semua tasks. Hanya Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Get all tasks
+	tasks, err := h.taskService.GetAllTasks()
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal mengambil data tasks: %s", err.Error())
+	}
+	
+	if len(tasks) == 0 {
+		return "📋 Tidak ada tasks dalam sistem."
+	}
+	
+	response := "📋 *Semua Tasks dalam Sistem:*\n\n"
+	for _, task := range tasks {
+		status := "⏳ Pending"
+		if task.Status == string(models.InProgress) {
+			status = "🔄 In Progress"
+		} else if task.Status == string(models.Completed) {
+			status = "✅ Completed"
+		} else if task.Status == string(models.Overdue) {
+			status = "⚠️ Overdue"
+		}
+		
+		response += fmt.Sprintf("🆔 *ID:* %d\n", task.ID)
+		response += fmt.Sprintf("📝 *Title:* %s\n", task.Title)
+		response += fmt.Sprintf("📄 *Description:* %s\n", task.Description)
+		response += fmt.Sprintf("👤 *Assigned To:* %d\n", task.AssignedTo)
+		response += fmt.Sprintf("📅 *Due Date:* %s\n", task.DueDate.Format("2006-01-02"))
+		response += fmt.Sprintf("📊 *Progress:* %d%%\n", task.CompletionPercentage)
+		response += fmt.Sprintf("🏷️ *Status:* %s\n", status)
+		response += fmt.Sprintf("🔄 *Implemented:* %t\n", task.IsImplemented)
+		response += "\n"
+	}
+	
+	return response
+}
+
+// handleAIUpdateProgress handles update_progress AI response
+func (h *WhatsAppHandler) handleAIUpdateProgress(user *models.User, aiResponse *AIResponse) string {
+	return "🔄 Untuk mengupdate progress task, gunakan format:\n/update_progress [task_id] [percentage]\n\nContoh: /update_progress 1 75"
+}
+
+// handleAIMarkComplete handles mark_complete AI response
+func (h *WhatsAppHandler) handleAIMarkComplete(user *models.User, aiResponse *AIResponse) string {
+	return "✅ Untuk menandai task sebagai selesai, gunakan format:\n/mark_complete [task_id]\n\nContoh: /mark_complete 1"
+}
+
+// handleAIMyReport handles my_report AI response
+func (h *WhatsAppHandler) handleAIMyReport(user *models.User, aiResponse *AIResponse) string {
+	return "📊 Untuk melihat laporan personal, gunakan format:\n/my_report\n\nAtau untuk laporan berdasarkan tanggal:\n/report_by_date [start_date] [end_date]\n\nContoh: /report_by_date 2025-01-01 2025-01-31"
+}
+
+// handleAIReportByDate handles report_by_date AI response
+func (h *WhatsAppHandler) handleAIReportByDate(user *models.User, aiResponse *AIResponse) string {
+	return "📅 Untuk generate laporan berdasarkan tanggal, gunakan format:\n/report_by_date [start_date] [end_date]\n\nContoh: /report_by_date 2025-01-01 2025-01-31\n\nFormat tanggal: YYYY-MM-DD"
 }

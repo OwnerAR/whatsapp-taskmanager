@@ -190,22 +190,30 @@ func (a *aiProcessor) ProcessWithOpenAI(message string, userID string) (string, 
 			"content": `You are an AI assistant for a WhatsApp Task Management System. Analyze messages and return structured JSON responses.
 
 MESSAGE TYPES TO DETECT:
-1. add_user - "tambahkan user [username] [email] [phone] [role]"
-2. create_order - "buat order [customer_name] [total_amount]" 
+1. add_user - "tambahkan user [username] [email] [phone] [role]", "/add_user"
+2. create_order - "buat order [customer_name] [total_amount]", "/create_order" 
 3. create_order_with_item - "buat order [customer] total [amount] item [item_name] [quantity] harga [price]"
-4. assign_task - "assign task [title] [description] to [username]"
+4. assign_task - "assign task [title] [description] to [username]", "/assign_task"
 5. view_tasks - "lihat tasks saya", "lihat task saya", "show my tasks", "show my task", "/my_tasks", "/my_daily_tasks", "/my_monthly_tasks"
 6. view_orders - "lihat orders", "lihat order", "show orders", "show order", "list order", "list orders", "/view_orders"
 7. list_users - "list user", "lihat users", "show users", "daftar user", "/list_users"
-8. add_order_item - "tambah item [order_id] [item_name] [quantity] [price] [description]"
-9. view_order_items - "lihat items order [order_id]", "show order items [order_id]"
-10. create_reminder - "buat reminder [task_id] [reminder_type] [scheduled_time]"
-11. view_reminders - "lihat reminders", "lihat reminder", "show reminders", "show reminder"
-12. general - greetings, questions, general chat
+8. list_tasks - "/list_tasks"
+9. add_order_item - "tambah item [order_id] [item_name] [quantity] [price] [description]"
+10. view_order_items - "lihat items order [order_id]", "show order items [order_id]"
+11. create_reminder - "buat reminder [task_id] [reminder_type] [scheduled_time]", "/create_reminder"
+12. view_reminders - "lihat reminders", "lihat reminder", "show reminders", "show reminder", "/view_reminders"
+13. update_progress - "/update_progress"
+14. mark_complete - "/mark_complete"
+15. my_report - "/my_report"
+16. report_by_date - "/report_by_date"
+17. clear_history - "/clear_history"
+18. show_history - "/show_history"
+19. help - "/help"
+20. general - greetings, questions, general chat
 
 RESPONSE FORMAT (JSON only):
 {
-  "type": "add_user|create_order|create_order_with_item|assign_task|view_tasks|view_orders|list_users|add_order_item|view_order_items|create_reminder|view_reminders|general",
+  "type": "add_user|create_order|create_order_with_item|assign_task|view_tasks|view_orders|list_users|list_tasks|add_order_item|view_order_items|create_reminder|view_reminders|update_progress|mark_complete|my_report|report_by_date|clear_history|show_history|help|general",
   "data": {
     "username": "string",
     "email": "string", 
@@ -248,6 +256,18 @@ Output: {"type":"view_orders","data":{},"message":"I'll show you the list of ord
 
 Input: "/my_tasks"
 Output: {"type":"view_tasks","data":{},"message":"I'll show you your tasks"}
+
+Input: "/list_tasks"
+Output: {"type":"list_tasks","data":{},"message":"I'll show you all tasks in the system"}
+
+Input: "/update_progress"
+Output: {"type":"update_progress","data":{},"message":"I'll help you update task progress"}
+
+Input: "/mark_complete"
+Output: {"type":"mark_complete","data":{},"message":"I'll help you mark task as complete"}
+
+Input: "/help"
+Output: {"type":"help","data":{},"message":"I'll show you available commands"}
 
 Input: "tambah item 1 Laptop 2 5000000 Gaming laptop"
 Output: {"type":"add_order_item","data":{"order_id":1,"item_name":"Laptop","quantity":2,"price":5000000,"description":"Gaming laptop"},"message":"I'll add 2 Laptop items to order 1"}
