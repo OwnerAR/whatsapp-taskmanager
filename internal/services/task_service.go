@@ -11,6 +11,7 @@ type TaskService interface {
 	CreateTask(task *models.Task) error
 	GetTaskByID(id uint) (*models.Task, error)
 	GetTasksByUser(userID uint) ([]models.Task, error)
+	GetAllTasks() ([]models.Task, error)
 	GetDailyTasks(userID uint, date time.Time) ([]models.Task, error)
 	GetMonthlyTasks(userID uint, monthYear string) ([]models.Task, error)
 	UpdateTask(task *models.Task) error
@@ -41,6 +42,10 @@ func (s *taskService) GetTaskByID(id uint) (*models.Task, error) {
 
 func (s *taskService) GetTasksByUser(userID uint) ([]models.Task, error) {
 	return s.taskRepo.GetByUserID(userID)
+}
+
+func (s *taskService) GetAllTasks() ([]models.Task, error) {
+	return s.taskRepo.GetAll()
 }
 
 func (s *taskService) GetDailyTasks(userID uint, date time.Time) ([]models.Task, error) {

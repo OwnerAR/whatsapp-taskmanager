@@ -11,6 +11,7 @@ type TaskRepository interface {
 	Create(task *models.Task) error
 	GetByID(id uint) (*models.Task, error)
 	GetByUserID(userID uint) ([]models.Task, error)
+	GetAll() ([]models.Task, error)
 	GetDailyTasks(userID uint, date time.Time) ([]models.Task, error)
 	GetMonthlyTasks(userID uint, monthYear string) ([]models.Task, error)
 	Update(task *models.Task) error
@@ -42,6 +43,12 @@ func (r *taskRepository) GetByID(id uint) (*models.Task, error) {
 func (r *taskRepository) GetByUserID(userID uint) ([]models.Task, error) {
 	var tasks []models.Task
 	err := r.db.Where("assigned_to = ?", userID).Find(&tasks).Error
+	return tasks, err
+}
+
+func (r *taskRepository) GetAll() ([]models.Task, error) {
+	var tasks []models.Task
+	err := r.db.Find(&tasks).Error
 	return tasks, err
 }
 
