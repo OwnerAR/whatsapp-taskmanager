@@ -12,7 +12,7 @@ type User struct {
 	Email         string         `json:"email" gorm:"unique;not null"`
 	PhoneNumber   string         `json:"phone_number"`
 	Role          string         `json:"role" gorm:"default:'user'"` // super_admin, admin, user
-	WhatsAppNumber string        `json:"whatsapp_number" gorm:"column:whats_app_number"`
+	WhatsAppNumber string        `json:"whatsapp_number" gorm:"column:whatsapp_number"`
 	IsActive      bool           `json:"is_active" gorm:"default:true"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
