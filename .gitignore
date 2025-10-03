@@ -1,4 +1,15 @@
 .cursor/
+.github/
+.vscode/
+.DS_Store
+node_modules/
+bin/
+obj/
+*.log
+*.exe
+*.dll
+*.so
+*.dylib
 
 ##Environment Variables
 .env

@@ -24,5 +24,5 @@ type UserRole string
 const (
 	SuperAdmin UserRole = "super_admin"
 	Admin      UserRole = "admin"
-	User       UserRole = "user"
+    Users UserRole = "user"
 )

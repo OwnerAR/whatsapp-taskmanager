@@ -10,9 +10,10 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=your_jwt_secret_here
       - WHATSAPP_API_URL=https://whatsapp-go.sebagja.id
-      - WHATSAPP_USERNAME=your_whatsapp_username
-      - WHATSAPP_PASSWORD=your_whatsapp_password
-      - WHATSAPP_PATH=your_whatsapp_path
+      - WHATSAPP_USERNAME=ETAN
+      - WHATSAPP_PASSWORD=121204l0vE!!@
+      - WHATSAPP_PATH=whatsapp-account1
+      - WHATSAPP_WEBHOOK_SECRET=superadmin
       - SERVER_PORT=8080
       - SESSION_TIMEOUT=3600
       - CACHE_TTL=1800
