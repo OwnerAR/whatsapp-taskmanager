@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"task_manager/internal/models"
@@ -20,6 +22,13 @@ type WhatsAppHandler struct {
 	orderService    services.OrderService
 	reminderService services.ReminderService
 	aiProcessor     services.AIProcessor
+}
+
+// AIResponse represents structured AI response
+type AIResponse struct {
+	Type    string                 `json:"type"`
+	Data    map[string]interface{} `json:"data"`
+	Message string                 `json:"message"`
 }
 
 func NewWhatsAppHandler(
@@ -169,59 +178,37 @@ func (h *WhatsAppHandler) EndSession(c *gin.Context) {
 func (h *WhatsAppHandler) processCommand(user *models.User, message string) string {
 	// Check if message is empty
 	if strings.TrimSpace(message) == "" {
-		return "❌ Empty message. Type /help for available commands."
+		return "❌ Empty message. Please send a message or use /help for available commands."
 	}
 
-	// Check if it's a command (starts with /)
+	// AI-First Approach: Process all messages with AI, with /commands as fallback
+	// Only use /commands for specific system operations like /help, /clear_history, etc.
 	if strings.HasPrefix(strings.TrimSpace(message), "/") {
 		// Parse command
 		parts := strings.Fields(message)
 		command := parts[0]
 		args := parts[1:]
+		
+		// Only handle specific system commands directly
 		switch command {
-	case "/help":
-		return h.getHelpMessage(user.Role)
-	case "/clear_history":
-		return h.clearChatHistory(user.ID)
-	case "/show_history":
-		return h.showChatHistory(user.ID)
-	case "/my_tasks":
-		return h.getUserTasks(user.ID)
-	case "/my_daily_tasks":
-		return h.getDailyTasks(user.ID)
-	case "/my_monthly_tasks":
-		return h.getMonthlyTasks(user.ID)
-	case "/update_progress":
-		return h.updateTaskProgress(user.ID, args)
-	case "/mark_complete":
-		return h.markTaskComplete(user.ID, args)
-	case "/view_orders":
-		return h.getUserOrders(user.ID)
-	case "/my_report":
-		return h.getUserReport(user.ID)
-	case "/report_by_date":
-		return h.getReportByDate(user.ID, args)
+		case "/help":
+			return h.getHelpMessage(user.Role)
+		case "/clear_history":
+			return h.clearChatHistory(user.ID)
+		case "/show_history":
+			return h.showChatHistory(user.ID)
 		default:
-			// Check if user is admin or super admin for admin commands
-			if user.Role == string(models.Admin) || user.Role == string(models.SuperAdmin) {
-				result := h.processAdminCommand(user, command, args)
-				// If admin command not found, try AI processing
-				if strings.Contains(result, "Unknown admin command") {
-					return h.processNaturalLanguageMessage(user, message)
-				}
-				return result
-			}
-			// For non-admin users, try AI processing for unknown commands
-			return h.processNaturalLanguageMessage(user, message)
+			// For other /commands, try AI processing first
+			return h.processAICommand(user, message)
 		}
 	} else {
-		// Handle natural language messages with AI
-		return h.processNaturalLanguageMessage(user, message)
+		// Handle all natural language messages with AI
+		return h.processAICommand(user, message)
 	}
 }
 
-// processNaturalLanguageMessage handles natural language messages with AI
-func (h *WhatsAppHandler) processNaturalLanguageMessage(user *models.User, message string) string {
+// processAICommand handles all messages with AI-first approach
+func (h *WhatsAppHandler) processAICommand(user *models.User, message string) string {
 	// Convert user ID to string for AI processor
 	userID := fmt.Sprintf("%d", user.ID)
 	
@@ -232,18 +219,432 @@ func (h *WhatsAppHandler) processNaturalLanguageMessage(user *models.User, messa
 		return "🤖 I'm having trouble understanding your message. Please try using a command like /help for available options."
 	}
 	
-	// Handle different types of AI responses
-	switch messageType {
-	case "order":
-		// AI detected an order message
-		return "📦 I detected an order message. Please use /create_order [customer_name] [total_amount] to create an order, or provide more details about the order."
-	case "task":
-		// AI detected a task message
-		return "📝 I detected a task message. Please use /assign_task [username] [title] [description] to create a task, or provide more details about the task."
-	default:
-		// General AI response
+	// Parse structured JSON response from AI
+	aiResponse, err := h.parseAIResponse(result)
+	if err != nil {
+		// Fallback to general response if JSON parsing fails
 		return fmt.Sprintf("🤖 %s", result)
 	}
+	
+	// Handle different types of AI responses with actual database operations
+	switch aiResponse.Type {
+	case "add_user":
+		return h.handleStructuredAIAddUser(user, aiResponse)
+	case "create_order":
+		return h.handleStructuredAICreateOrder(user, aiResponse)
+	case "assign_task":
+		return h.handleStructuredAIAssignTask(user, aiResponse)
+	case "view_tasks":
+		return h.handleAIViewTasks(user, message, result)
+	case "view_orders":
+		return h.handleAIViewOrders(user, message, result)
+	case "general":
+		// General AI response
+		return fmt.Sprintf("🤖 %s", aiResponse.Message)
+	default:
+		// Try to detect intent and provide helpful response
+		return h.handleAIGeneralIntent(user, message, result)
+	}
+}
+
+// processNaturalLanguageMessage - kept for backward compatibility
+func (h *WhatsAppHandler) processNaturalLanguageMessage(user *models.User, message string) string {
+	return h.processAICommand(user, message)
+}
+
+// parseAIResponse parses structured JSON response from AI
+func (h *WhatsAppHandler) parseAIResponse(result interface{}) (*AIResponse, error) {
+	var aiResponse AIResponse
+	
+	// Convert result to string if needed
+	var jsonStr string
+	switch v := result.(type) {
+	case string:
+		jsonStr = v
+	default:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal result: %w", err)
+		}
+		jsonStr = string(jsonBytes)
+	}
+	
+	// Parse JSON
+	err := json.Unmarshal([]byte(jsonStr), &aiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse AI response: %w", err)
+	}
+	
+	return &aiResponse, nil
+}
+
+// handleStructuredAIAddUser handles structured AI add user requests
+func (h *WhatsAppHandler) handleStructuredAIAddUser(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has SuperAdmin access
+	if user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk menambah user. Hanya Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Extract data from AI response
+	username, _ := aiResponse.Data["username"].(string)
+	email, _ := aiResponse.Data["email"].(string)
+	phone, _ := aiResponse.Data["phone"].(string)
+	role, _ := aiResponse.Data["role"].(string)
+	
+	// Validate required fields
+	if username == "" || email == "" || phone == "" || role == "" {
+		return "❌ Data tidak lengkap. Pastikan username, email, phone, dan role tersedia."
+	}
+	
+	// Validate role
+	validRoles := []string{"SuperAdmin", "Admin", "User"}
+	validRole := false
+	for _, r := range validRoles {
+		if strings.EqualFold(role, r) {
+			role = r
+			validRole = true
+			break
+		}
+	}
+	
+	if !validRole {
+		return "❌ Role tidak valid. Gunakan: SuperAdmin, Admin, atau User"
+	}
+	
+	// Convert phone format if needed
+	if strings.HasPrefix(phone, "08") {
+		phone = "62" + phone[1:]
+	}
+	
+	// Create user
+	newUser := &models.User{
+		Username:       username,
+		Email:          email,
+		PhoneNumber:    phone,
+		WhatsAppNumber: phone,
+		Role:           role,
+		IsActive:       true,
+	}
+	
+	err := h.userService.CreateUser(newUser, "default123")
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal menambah user: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ User berhasil ditambahkan!\n👤 Username: %s\n📧 Email: %s\n📱 Phone: %s\n🔑 Role: %s\n🔐 Password: default123", username, email, phone, role)
+}
+
+// handleStructuredAICreateOrder handles structured AI create order requests
+func (h *WhatsAppHandler) handleStructuredAICreateOrder(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk membuat order. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Extract data from AI response
+	customerName, _ := aiResponse.Data["customer_name"].(string)
+	totalAmountFloat, _ := aiResponse.Data["total_amount"].(float64)
+	
+	// Validate required fields
+	if customerName == "" || totalAmountFloat == 0 {
+		return "❌ Data tidak lengkap. Pastikan customer_name dan total_amount tersedia."
+	}
+	
+	// Create order using existing service
+	order := &models.Order{
+		CustomerName: customerName,
+		TotalAmount:  totalAmountFloat,
+		Status:       "pending",
+		OrderDate:    time.Now(),
+		CreatedBy:    user.ID,
+	}
+	
+	err := h.orderService.CreateOrder(order)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal membuat order: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ Order berhasil dibuat!\n📦 Customer: %s\n💰 Total: Rp %.0f\n📅 Tanggal: %s", 
+		customerName, totalAmountFloat, order.OrderDate.Format("2006-01-02 15:04"))
+}
+
+// handleStructuredAIAssignTask handles structured AI assign task requests
+func (h *WhatsAppHandler) handleStructuredAIAssignTask(user *models.User, aiResponse *AIResponse) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk menugaskan task. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Extract data from AI response
+	title, _ := aiResponse.Data["title"].(string)
+	description, _ := aiResponse.Data["description"].(string)
+	assignedToUsername, _ := aiResponse.Data["assigned_to"].(string)
+	
+	// Validate required fields
+	if title == "" || description == "" || assignedToUsername == "" {
+		return "❌ Data tidak lengkap. Pastikan title, description, dan assigned_to tersedia."
+	}
+	
+	// Find user by username
+	assignedUser, err := h.userService.GetUserByUsername(assignedToUsername)
+	if err != nil {
+		return fmt.Sprintf("❌ User '%s' tidak ditemukan. Pastikan username benar.", assignedToUsername)
+	}
+	
+	// Create task
+	task := &models.Task{
+		Title:       title,
+		Description: description,
+		AssignedTo:  assignedUser.ID,
+		Status:      string(models.Pending),
+		Priority:    string(models.Medium),
+		TaskType:    string(models.Custom),
+		CreatedBy:   user.ID,
+	}
+	
+	err = h.taskService.CreateTask(task)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal membuat task: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ Task berhasil ditugaskan!\n📝 Title: %s\n📄 Description: %s\n👤 Assigned to: %s", 
+		title, description, assignedToUsername)
+}
+
+// handleAIAddUser processes AI-detected add user requests
+func (h *WhatsAppHandler) handleAIAddUser(user *models.User, message string, aiResult interface{}) string {
+	// Check if user has SuperAdmin access
+	if user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk menambah user. Hanya Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Parse user information from message using regex
+	// Pattern: "tambahkan user [username] [email] [phone] [role]"
+	userRegex := regexp.MustCompile(`(?i)(?:tambahkan|add|create)\s+user\s+(\w+)\s+([^\s]+@[^\s]+)\s+(\d+)\s+(\w+)`)
+	matches := userRegex.FindStringSubmatch(message)
+	
+	if len(matches) < 5 {
+		return "❌ Format tidak valid. Gunakan: 'tambahkan user [username] [email] [phone] [role]'\nContoh: 'tambahkan user ega egatryagung@gmail.com 08123456789 SuperAdmin'"
+	}
+	
+	username := matches[1]
+	email := matches[2]
+	phone := matches[3]
+	role := matches[4]
+	
+	// Validate role
+	validRoles := []string{"SuperAdmin", "Admin", "User"}
+	validRole := false
+	for _, r := range validRoles {
+		if strings.EqualFold(role, r) {
+			role = r
+			validRole = true
+			break
+		}
+	}
+	
+	if !validRole {
+		return "❌ Role tidak valid. Gunakan: SuperAdmin, Admin, atau User"
+	}
+	
+	// Convert phone format if needed
+	if strings.HasPrefix(phone, "08") {
+		phone = "62" + phone[1:]
+	}
+	
+	// Create user
+	newUser := &models.User{
+		Username:       username,
+		Email:          email,
+		PhoneNumber:    phone,
+		WhatsAppNumber: phone,
+		Role:           role,
+		IsActive:       true,
+	}
+	
+	err := h.userService.CreateUser(newUser, "default123")
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal menambah user: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ User berhasil ditambahkan!\n👤 Username: %s\n📧 Email: %s\n📱 Phone: %s\n🔑 Role: %s\n🔐 Password: default123", username, email, phone, role)
+}
+
+// handleAICreateOrder processes AI-detected create order requests
+func (h *WhatsAppHandler) handleAICreateOrder(user *models.User, message string, aiResult interface{}) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk membuat order. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Parse order information from message
+	orderRegex := regexp.MustCompile(`(?i)(?:buat|create|tambah)\s+order\s+([^0-9]+)\s+(\d+(?:\.\d+)?)`)
+	matches := orderRegex.FindStringSubmatch(message)
+	
+	if len(matches) < 3 {
+		return "❌ Format tidak valid. Gunakan: 'buat order [customer_name] [total_amount]'\nContoh: 'buat order John Doe 1000000'"
+	}
+	
+	customerName := strings.TrimSpace(matches[1])
+	totalAmountStr := matches[2]
+	
+	totalAmount, err := strconv.ParseFloat(totalAmountStr, 64)
+	if err != nil {
+		return "❌ Total amount tidak valid. Gunakan angka yang benar."
+	}
+	
+	// Create order using existing service
+	order := &models.Order{
+		CustomerName: customerName,
+		TotalAmount:  totalAmount,
+		Status:       "pending",
+		OrderDate:    time.Now(),
+		CreatedBy:    user.ID,
+	}
+	
+	err = h.orderService.CreateOrder(order)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal membuat order: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ Order berhasil dibuat!\n📦 Customer: %s\n💰 Total: Rp %.0f\n📅 Tanggal: %s", 
+		customerName, totalAmount, order.OrderDate.Format("2006-01-02 15:04"))
+}
+
+// handleAIAssignTask processes AI-detected assign task requests
+func (h *WhatsAppHandler) handleAIAssignTask(user *models.User, message string, aiResult interface{}) string {
+	// Check if user has Admin or SuperAdmin access
+	if user.Role != string(models.Admin) && user.Role != string(models.SuperAdmin) {
+		return "❌ Anda tidak memiliki akses untuk menugaskan task. Hanya Admin atau Super Admin yang dapat melakukan operasi ini."
+	}
+	
+	// Parse task information from message
+	taskRegex := regexp.MustCompile(`(?i)(?:assign|tugaskan|berikan)\s+task\s+(\w+)\s+(.+?)\s+to\s+(\w+)`)
+	matches := taskRegex.FindStringSubmatch(message)
+	
+	if len(matches) < 4 {
+		return "❌ Format tidak valid. Gunakan: 'assign task [title] [description] to [username]'\nContoh: 'assign task Update Website Update homepage design to john'"
+	}
+	
+	title := strings.TrimSpace(matches[1])
+	description := strings.TrimSpace(matches[2])
+	assignedToUsername := strings.TrimSpace(matches[3])
+	
+	// Find user by username
+	assignedUser, err := h.userService.GetUserByUsername(assignedToUsername)
+	if err != nil {
+		return fmt.Sprintf("❌ User '%s' tidak ditemukan. Pastikan username benar.", assignedToUsername)
+	}
+	
+	// Create task
+	task := &models.Task{
+		Title:       title,
+		Description: description,
+		AssignedTo:  assignedUser.ID,
+		Status:      string(models.Pending),
+		Priority:    string(models.Medium),
+		TaskType:    string(models.Custom),
+		CreatedBy:   user.ID,
+	}
+	
+	err = h.taskService.CreateTask(task)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal membuat task: %s", err.Error())
+	}
+	
+	return fmt.Sprintf("✅ Task berhasil ditugaskan!\n📝 Title: %s\n📄 Description: %s\n👤 Assigned to: %s", 
+		title, description, assignedToUsername)
+}
+
+// handleAIViewTasks processes AI-detected view tasks requests
+func (h *WhatsAppHandler) handleAIViewTasks(user *models.User, message string, aiResult interface{}) string {
+	tasks, err := h.taskService.GetTasksByUser(user.ID)
+	if err != nil {
+		return fmt.Sprintf("❌ Gagal mengambil tasks: %s", err.Error())
+	}
+	
+	if len(tasks) == 0 {
+		return "📝 Tidak ada task yang ditugaskan kepada Anda."
+	}
+	
+	response := "📝 **Your Tasks:**\n\n"
+	for _, task := range tasks {
+		status := "❌ Pending"
+		if task.Status == string(models.InProgress) {
+			status = "🔄 In Progress"
+		} else if task.Status == string(models.Completed) {
+			status = "✅ Completed"
+		}
+		
+		response += fmt.Sprintf("**%s**\n", task.Title)
+		response += fmt.Sprintf("Description: %s\n", task.Description)
+		response += fmt.Sprintf("Status: %s\n", status)
+		response += fmt.Sprintf("Progress: %d%%\n\n", task.CompletionPercentage)
+	}
+	
+	return response
+}
+
+// handleAIViewOrders processes AI-detected view orders requests
+func (h *WhatsAppHandler) handleAIViewOrders(user *models.User, message string, aiResult interface{}) string {
+	// Check if user has Admin or SuperAdmin access for all orders
+	if user.Role == string(models.Admin) || user.Role == string(models.SuperAdmin) {
+		orders, err := h.orderService.GetAllOrders()
+		if err != nil {
+			return fmt.Sprintf("❌ Gagal mengambil orders: %s", err.Error())
+		}
+		
+		if len(orders) == 0 {
+			return "📦 Tidak ada order yang ditemukan."
+		}
+		
+		response := "📦 **All Orders:**\n\n"
+		for _, order := range orders {
+			response += fmt.Sprintf("**Order #%d**\n", order.ID)
+			response += fmt.Sprintf("Customer: %s\n", order.CustomerName)
+			response += fmt.Sprintf("Total: Rp %.0f\n", order.TotalAmount)
+			response += fmt.Sprintf("Status: %s\n\n", order.Status)
+		}
+		
+		return response
+	} else {
+		// Regular users can only see their own orders
+		orders, err := h.orderService.GetOrdersByUser(user.ID)
+		if err != nil {
+			return fmt.Sprintf("❌ Gagal mengambil orders: %s", err.Error())
+		}
+		
+		if len(orders) == 0 {
+			return "📦 Tidak ada order yang terkait dengan Anda."
+		}
+		
+		response := "📦 **Your Orders:**\n\n"
+		for _, order := range orders {
+			response += fmt.Sprintf("**Order #%d**\n", order.ID)
+			response += fmt.Sprintf("Customer: %s\n", order.CustomerName)
+			response += fmt.Sprintf("Total: Rp %.0f\n", order.TotalAmount)
+			response += fmt.Sprintf("Status: %s\n\n", order.Status)
+		}
+		
+		return response
+	}
+}
+
+// handleAIGeneralIntent handles general AI responses
+func (h *WhatsAppHandler) handleAIGeneralIntent(user *models.User, message string, aiResult interface{}) string {
+	// Check for common intents and provide helpful responses
+	messageLower := strings.ToLower(message)
+	
+	if strings.Contains(messageLower, "halo") || strings.Contains(messageLower, "hi") || strings.Contains(messageLower, "hello") {
+		return fmt.Sprintf("👋 Halo %s! Saya AI assistant untuk Task Manager.\n\nSaya dapat membantu Anda dengan:\n• Menambah user (Super Admin)\n• Membuat order (Admin)\n• Menugaskan task (Admin)\n• Melihat tasks dan orders\n\nCoba katakan: 'lihat tasks saya' atau 'buat order John 1000000'", user.Username)
+	}
+	
+	if strings.Contains(messageLower, "help") || strings.Contains(messageLower, "bantuan") {
+		return h.getHelpMessage(user.Role)
+	}
+	
+	// Default AI response
+	return fmt.Sprintf("🤖 %s", aiResult)
 }
 
 func (h *WhatsAppHandler) processAdminCommand(user *models.User, command string, args []string) string {
